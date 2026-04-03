@@ -3,7 +3,6 @@
  */
 
 import type { ToolDefinition, ToolInputSchema, ToolContext, ToolResult } from '../types.js'
-import type Anthropic from '@anthropic-ai/sdk'
 
 /**
  * Helper to create a tool definition with sensible defaults.
@@ -52,11 +51,16 @@ export function defineTool(config: {
 
 /**
  * Convert a ToolDefinition to API-compatible tool format.
+ * Returns the normalized tool format used by providers.
  */
-export function toApiTool(tool: ToolDefinition): Anthropic.Tool {
+export function toApiTool(tool: ToolDefinition): {
+  name: string
+  description: string
+  input_schema: ToolInputSchema
+} {
   return {
     name: tool.name,
     description: tool.description,
-    input_schema: tool.inputSchema as Anthropic.Tool.InputSchema,
+    input_schema: tool.inputSchema,
   }
 }

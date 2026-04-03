@@ -4,7 +4,7 @@
 [![Node.js](https://img.shields.io/badge/node-%3E%3D18-brightgreen)](https://nodejs.org)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue)](./LICENSE)
 
-Open-source Agent SDK that runs the full agent loop **in-process** — no subprocess or CLI required. Deploy anywhere: cloud, serverless, Docker, CI/CD.
+Open-source Agent SDK that runs the full agent loop **in-process** — no subprocess or CLI required. Supports both **Anthropic** and **OpenAI-compatible** APIs. Deploy anywhere: cloud, serverless, Docker, CI/CD.
 
 Also available in **Go**: [open-agent-sdk-go](https://github.com/codeany-ai/open-agent-sdk-go)
 
@@ -20,7 +20,18 @@ Set your API key:
 export CODEANY_API_KEY=your-api-key
 ```
 
-Third-party providers (e.g. OpenRouter) are supported via `CODEANY_BASE_URL`:
+### OpenAI-compatible models
+
+Works with OpenAI, DeepSeek, Qwen, Mistral, or any OpenAI-compatible endpoint:
+
+```bash
+export CODEANY_API_TYPE=openai-completions
+export CODEANY_API_KEY=sk-...
+export CODEANY_BASE_URL=https://api.openai.com/v1
+export CODEANY_MODEL=gpt-4o
+```
+
+### Third-party Anthropic-compatible providers
 
 ```bash
 export CODEANY_BASE_URL=https://openrouter.ai/api
@@ -63,6 +74,24 @@ console.log(
   `Turns: ${result.num_turns}, Tokens: ${result.usage.input_tokens + result.usage.output_tokens}`,
 );
 ```
+
+### OpenAI / GPT models
+
+```typescript
+import { createAgent } from "@codeany/open-agent-sdk";
+
+const agent = createAgent({
+  apiType: "openai-completions",
+  model: "gpt-4o",
+  apiKey: "sk-...",
+  baseURL: "https://api.openai.com/v1",
+});
+
+const result = await agent.prompt("What files are in this project?");
+console.log(result.text);
+```
+
+The `apiType` is auto-detected from model name — models containing `gpt-`, `o1`, `o3`, `deepseek`, `qwen`, `mistral`, etc. automatically use `openai-completions`.
 
 ### Multi-turn conversation
 
@@ -136,6 +165,66 @@ const agent = createAgent({ tools: [...getAllBaseTools(), calculator] });
 const r = await agent.prompt("Calculate 2**10 * 3");
 console.log(r.text);
 ```
+
+### Skills
+
+Skills are reusable prompt templates that extend agent capabilities. Five bundled skills are included: `simplify`, `commit`, `review`, `debug`, `test`.
+
+```typescript
+import {
+  createAgent,
+  registerSkill,
+  getAllSkills,
+} from "@codeany/open-agent-sdk";
+
+// Register a custom skill
+registerSkill({
+  name: "explain",
+  description: "Explain a concept in simple terms",
+  userInvocable: true,
+  async getPrompt(args) {
+    return [
+      {
+        type: "text",
+        text: `Explain in simple terms: ${args || "Ask what to explain."}`,
+      },
+    ];
+  },
+});
+
+console.log(`${getAllSkills().length} skills registered`);
+
+// The model can invoke skills via the Skill tool
+const agent = createAgent();
+const result = await agent.prompt('Use the "explain" skill to explain git rebase');
+console.log(result.text);
+```
+
+### Hooks (lifecycle events)
+
+```typescript
+import { createAgent, createHookRegistry } from "@codeany/open-agent-sdk";
+
+const hooks = createHookRegistry({
+  PreToolUse: [
+    {
+      handler: async (input) => {
+        console.log(`About to use: ${input.toolName}`);
+        // Return { block: true } to prevent tool execution
+      },
+    },
+  ],
+  PostToolUse: [
+    {
+      handler: async (input) => {
+        console.log(`Tool ${input.toolName} completed`);
+      },
+    },
+  ],
+});
+```
+
+20 lifecycle events: `PreToolUse`, `PostToolUse`, `PostToolUseFailure`, `SessionStart`, `SessionEnd`, `Stop`, `SubagentStart`, `SubagentStop`, `UserPromptSubmit`, `PermissionRequest`, `PermissionDenied`, `TaskCreated`, `TaskCompleted`, `ConfigChange`, `CwdChanged`, `FileChanged`, `Notification`, `PreCompact`, `PostCompact`, `TeammateIdle`.
 
 ### MCP server integration
 
@@ -214,9 +303,12 @@ npx tsx examples/web/server.ts
 | `tool(name, desc, schema, handler)`   | Create a tool with Zod schema validation                       |
 | `createSdkMcpServer({ name, tools })` | Bundle tools into an in-process MCP server                     |
 | `defineTool(config)`                  | Low-level tool definition helper                               |
-| `getAllBaseTools()`                   | Get all 34 built-in tools                                      |
+| `getAllBaseTools()`                   | Get all 35+ built-in tools                                     |
+| `registerSkill(definition)`           | Register a custom skill                                        |
+| `getAllSkills()`                       | Get all registered skills                                      |
+| `createProvider(apiType, opts)`        | Create an LLM provider directly                                |
+| `createHookRegistry(config)`          | Create a hook registry for lifecycle events                    |
 | `listSessions()`                      | List persisted sessions                                        |
-| `getSessionMessages(id)`              | Retrieve messages from a session                               |
 | `forkSession(id)`                     | Fork a session for branching                                   |
 
 ### Agent methods
@@ -230,12 +322,14 @@ npx tsx examples/web/server.ts
 | `agent.interrupt()`             | Abort current query                                   |
 | `agent.setModel(model)`         | Change model mid-session                              |
 | `agent.setPermissionMode(mode)` | Change permission mode                                |
+| `agent.getApiType()`            | Get current API type                                  |
 | `agent.close()`                 | Close MCP connections, persist session                |
 
 ### Options
 
 | Option               | Type                                    | Default                | Description                                                          |
 | -------------------- | --------------------------------------- | ---------------------- | -------------------------------------------------------------------- |
+| `apiType`            | `string`                                | auto-detected          | `'anthropic-messages'` or `'openai-completions'`                     |
 | `model`              | `string`                                | `claude-sonnet-4-6`    | LLM model ID                                                         |
 | `apiKey`             | `string`                                | `CODEANY_API_KEY`      | API key                                                              |
 | `baseURL`            | `string`                                | —                      | Custom API endpoint                                                  |
@@ -266,12 +360,13 @@ npx tsx examples/web/server.ts
 
 ### Environment variables
 
-| Variable             | Description            |
-| -------------------- | ---------------------- |
-| `CODEANY_API_KEY`    | API key (required)     |
-| `CODEANY_MODEL`      | Default model override |
-| `CODEANY_BASE_URL`   | Custom API endpoint    |
-| `CODEANY_AUTH_TOKEN` | Alternative auth token |
+| Variable             | Description                                              |
+| -------------------- | -------------------------------------------------------- |
+| `CODEANY_API_KEY`    | API key (required)                                       |
+| `CODEANY_API_TYPE`   | `anthropic-messages` (default) or `openai-completions`   |
+| `CODEANY_MODEL`      | Default model override                                   |
+| `CODEANY_BASE_URL`   | Custom API endpoint                                      |
+| `CODEANY_AUTH_TOKEN` | Alternative auth token                                   |
 
 ## Built-in tools
 
@@ -287,6 +382,7 @@ npx tsx examples/web/server.ts
 | **WebSearch**                              | Search the web                               |
 | **NotebookEdit**                           | Edit Jupyter notebook cells                  |
 | **Agent**                                  | Spawn subagents for parallel work            |
+| **Skill**                                  | Invoke registered skills                     |
 | **TaskCreate/List/Update/Get/Stop/Output** | Task management system                       |
 | **TeamCreate/Delete**                      | Multi-agent team coordination                |
 | **SendMessage**                            | Inter-agent messaging                        |
@@ -301,6 +397,18 @@ npx tsx examples/web/server.ts
 | **Config**                                 | Dynamic configuration                        |
 | **TodoWrite**                              | Session todo list                            |
 
+## Bundled skills
+
+| Skill        | Description                                                    |
+| ------------ | -------------------------------------------------------------- |
+| `simplify`   | Review changed code for reuse, quality, and efficiency         |
+| `commit`     | Create a git commit with a well-crafted message                |
+| `review`     | Review code changes for correctness, security, and performance |
+| `debug`      | Systematic debugging using structured investigation            |
+| `test`       | Run tests and analyze failures                                 |
+
+Register custom skills with `registerSkill()`.
+
 ## Architecture
 
 ```
@@ -312,7 +420,7 @@ npx tsx examples/web/server.ts
                          │
               ┌──────────▼──────────┐
               │       Agent         │  Session state, tool pool,
-              │  query() / prompt() │  MCP connections
+              │  query() / prompt() │  MCP connections, hooks
               └──────────┬──────────┘
                          │
               ┌──────────▼──────────┐
@@ -323,26 +431,28 @@ npx tsx examples/web/server.ts
          ┌───────────────┼───────────────┐
          │               │               │
    ┌─────▼─────┐  ┌─────▼─────┐  ┌─────▼─────┐
-   │  LLM API  │  │  34 Tools │  │    MCP     │
-   │  Client   │  │ Bash,Read │  │  Servers   │
-   │ (streaming)│  │ Edit,...  │  │ stdio/SSE/ │
-   └───────────┘  └───────────┘  │ HTTP/SDK   │
-                                  └───────────┘
+   │  Provider  │  │  35 Tools │  │    MCP     │
+   │ Anthropic  │  │ Bash,Read │  │  Servers   │
+   │  OpenAI    │  │ Edit,...  │  │ stdio/SSE/ │
+   │ DeepSeek   │  │ + Skills  │  │ HTTP/SDK   │
+   └───────────┘  └───────────┘  └───────────┘
 ```
 
 **Key internals:**
 
-| Component             | Description                                                      |
-| --------------------- | ---------------------------------------------------------------- |
-| **QueryEngine**       | Core agentic loop with auto-compact, retry, tool orchestration   |
-| **Auto-compact**      | Summarizes conversation when context window fills up             |
-| **Micro-compact**     | Truncates oversized tool results                                 |
-| **Retry**             | Exponential backoff for rate limits and transient errors         |
-| **Token estimation**  | Rough token counting for budget and compaction thresholds        |
-| **File cache**        | LRU cache (100 entries, 25 MB) for file reads                    |
-| **Hook system**       | 20 lifecycle events (PreToolUse, PostToolUse, SessionStart, ...) |
-| **Session storage**   | Persist / resume / fork sessions on disk                         |
-| **Context injection** | Git status + AGENT.md automatically injected into system prompt  |
+| Component             | Description                                                        |
+| --------------------- | ------------------------------------------------------------------ |
+| **Provider layer**    | Abstracts Anthropic / OpenAI API differences                       |
+| **QueryEngine**       | Core agentic loop with auto-compact, retry, tool orchestration     |
+| **Skill system**      | Reusable prompt templates with 5 bundled skills                    |
+| **Hook system**       | 20 lifecycle events integrated into the engine                     |
+| **Auto-compact**      | Summarizes conversation when context window fills up               |
+| **Micro-compact**     | Truncates oversized tool results                                   |
+| **Retry**             | Exponential backoff for rate limits and transient errors            |
+| **Token estimation**  | Rough token counting with pricing for Claude, GPT, DeepSeek models |
+| **File cache**        | LRU cache (100 entries, 25 MB) for file reads                      |
+| **Session storage**   | Persist / resume / fork sessions on disk                           |
+| **Context injection** | Git status + AGENT.md automatically injected into system prompt    |
 
 ## Examples
 
@@ -359,6 +469,9 @@ npx tsx examples/web/server.ts
 | 09  | `examples/09-subagents.ts`            | Subagent delegation                    |
 | 10  | `examples/10-permissions.ts`          | Read-only agent with tool restrictions |
 | 11  | `examples/11-custom-mcp-tools.ts`     | `tool()` + `createSdkMcpServer()`      |
+| 12  | `examples/12-skills.ts`              | Skill system usage                     |
+| 13  | `examples/13-hooks.ts`               | Lifecycle hooks                        |
+| 14  | `examples/14-openai-compat.ts`       | OpenAI / DeepSeek models               |
 | web | `examples/web/`                       | Web chat UI for testing                |
 
 Run any example:

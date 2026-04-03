@@ -62,6 +62,9 @@ import { ConfigTool } from './config-tool.js'
 // Todo
 import { TodoWriteTool } from './todo-tool.js'
 
+// Skill
+import { SkillTool } from './skill-tool.js'
+
 /**
  * All built-in tools (30+).
  */
@@ -125,6 +128,9 @@ const ALL_TOOLS: ToolDefinition[] = [
 
   // Todo
   TodoWriteTool,
+
+  // Skill
+  SkillTool,
 ]
 
 /**
@@ -226,6 +232,8 @@ export {
   ConfigTool,
   // Todo
   TodoWriteTool,
+  // Skill
+  SkillTool,
 }
 
 // Re-export helpers

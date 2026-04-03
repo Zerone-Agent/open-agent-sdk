@@ -5,14 +5,13 @@
  * synthetic placeholders, and content processing.
  */
 
-import type Anthropic from '@anthropic-ai/sdk'
 import type { Message, UserMessage, AssistantMessage, TokenUsage } from '../types.js'
 
 /**
  * Create a user message.
  */
 export function createUserMessage(
-  content: string | Anthropic.ContentBlockParam[],
+  content: string | any[],
   options?: {
     uuid?: string
     isMeta?: boolean
@@ -34,7 +33,7 @@ export function createUserMessage(
  * Create an assistant message.
  */
 export function createAssistantMessage(
-  content: Anthropic.ContentBlock[],
+  content: any[],
   usage?: TokenUsage,
 ): AssistantMessage {
   return {
@@ -55,9 +54,9 @@ export function createAssistantMessage(
  * and fixes tool result pairing.
  */
 export function normalizeMessagesForAPI(
-  messages: Anthropic.MessageParam[],
-): Anthropic.MessageParam[] {
-  const normalized: Anthropic.MessageParam[] = []
+  messages: Array<{ role: string; content: any }>,
+): Array<{ role: string; content: any }> {
+  const normalized: Array<{ role: string; content: any }> = []
 
   for (let i = 0; i < messages.length; i++) {
     const msg = messages[i]
@@ -96,9 +95,9 @@ export function normalizeMessagesForAPI(
  * matching tool_use in the previous assistant message.
  */
 function fixToolResultPairing(
-  messages: Anthropic.MessageParam[],
-): Anthropic.MessageParam[] {
-  const result: Anthropic.MessageParam[] = []
+  messages: Array<{ role: string; content: any }>,
+): Array<{ role: string; content: any }> {
+  const result: Array<{ role: string; content: any }> = []
 
   for (let i = 0; i < messages.length; i++) {
     const msg = messages[i]
@@ -145,8 +144,8 @@ function fixToolResultPairing(
  * Strip images from messages (for compaction).
  */
 export function stripImagesFromMessages(
-  messages: Anthropic.MessageParam[],
-): Anthropic.MessageParam[] {
+  messages: Array<{ role: string; content: any }>,
+): Array<{ role: string; content: any }> {
   return messages.map((msg) => {
     if (typeof msg.content === 'string') return msg
     if (!Array.isArray(msg.content)) return msg
@@ -166,7 +165,7 @@ export function stripImagesFromMessages(
  * Extract text from message content blocks.
  */
 export function extractTextFromContent(
-  content: Anthropic.ContentBlock[] | string,
+  content: any[] | string,
 ): string {
   if (typeof content === 'string') return content
 
@@ -179,7 +178,7 @@ export function extractTextFromContent(
 /**
  * Create a system message for compact boundary.
  */
-export function createCompactBoundaryMessage(): Anthropic.MessageParam {
+export function createCompactBoundaryMessage(): { role: string; content: string } {
   return {
     role: 'user',
     content: '[Previous context has been summarized above. Continuing conversation.]',

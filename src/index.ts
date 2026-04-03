@@ -6,6 +6,7 @@
  *
  * Features:
  * - 30+ built-in tools (file I/O, shell, web, agents, tasks, teams, etc.)
+ * - Skill system (reusable prompt templates with bundled skills)
  * - MCP server integration (stdio, SSE, HTTP)
  * - Context compression (auto-compact, micro-compact)
  * - Retry with exponential backoff
@@ -14,7 +15,7 @@
  * - Permission system (allow/deny/bypass modes)
  * - Subagent spawning & team coordination
  * - Task management & scheduling
- * - Hook system (pre/post tool use, lifecycle events)
+ * - Hook system with lifecycle integration (pre/post tool use, session, compact)
  * - Token estimation & cost tracking
  * - File state LRU caching
  * - Plan mode for structured workflows
@@ -49,6 +50,26 @@ export type { McpSdkServerConfig } from './sdk-mcp-server.js'
 // --------------------------------------------------------------------------
 
 export { QueryEngine } from './engine.js'
+
+// --------------------------------------------------------------------------
+// LLM Providers (Anthropic + OpenAI)
+// --------------------------------------------------------------------------
+
+export {
+  createProvider,
+  AnthropicProvider,
+  OpenAIProvider,
+} from './providers/index.js'
+export type {
+  ApiType,
+  LLMProvider,
+  CreateMessageParams,
+  CreateMessageResponse,
+  NormalizedMessageParam,
+  NormalizedContentBlock,
+  NormalizedTool,
+  NormalizedResponseBlock,
+} from './providers/index.js'
 
 // --------------------------------------------------------------------------
 // Tool System (30+ tools)
@@ -123,6 +144,9 @@ export {
 
   // Todo
   TodoWriteTool,
+
+  // Skill
+  SkillTool,
 } from './tools/index.js'
 
 // --------------------------------------------------------------------------
@@ -131,6 +155,27 @@ export {
 
 export { connectMCPServer, closeAllConnections } from './mcp/client.js'
 export type { MCPConnection } from './mcp/client.js'
+
+// --------------------------------------------------------------------------
+// Skill System
+// --------------------------------------------------------------------------
+
+export {
+  registerSkill,
+  getSkill,
+  getAllSkills,
+  getUserInvocableSkills,
+  hasSkill,
+  unregisterSkill,
+  clearSkills,
+  formatSkillsForPrompt,
+  initBundledSkills,
+} from './skills/index.js'
+export type {
+  SkillDefinition,
+  SkillContentBlock,
+  SkillResult,
+} from './skills/index.js'
 
 // --------------------------------------------------------------------------
 // Hook System
@@ -341,6 +386,7 @@ export type {
 
   // Permission types
   PermissionMode,
+  PermissionBehavior,
   CanUseToolFn,
   CanUseToolResult,
 
@@ -359,6 +405,10 @@ export type {
 
   // Engine types
   QueryEngineConfig,
+
+  // Content block types
+  ContentBlockParam,
+  ContentBlock,
 
   // Sandbox types
   SandboxSettings,

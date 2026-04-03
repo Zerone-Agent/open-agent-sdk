@@ -8,7 +8,8 @@
  * 3. Session memory compaction: consolidates across sessions
  */
 
-import Anthropic from '@anthropic-ai/sdk'
+import type { LLMProvider } from '../providers/types.js'
+import type { NormalizedMessageParam } from '../providers/types.js'
 import {
   estimateMessagesTokens,
   getAutoCompactThreshold,
@@ -38,7 +39,7 @@ export function createAutoCompactState(): AutoCompactState {
  * Check if auto-compaction should trigger.
  */
 export function shouldAutoCompact(
-  messages: Anthropic.MessageParam[],
+  messages: any[],
   model: string,
   state: AutoCompactState,
 ): boolean {
@@ -57,12 +58,12 @@ export function shouldAutoCompact(
  * then replaces the history with a compact summary.
  */
 export async function compactConversation(
-  client: Anthropic,
+  provider: LLMProvider,
   model: string,
-  messages: Anthropic.MessageParam[],
+  messages: any[],
   state: AutoCompactState,
 ): Promise<{
-  compactedMessages: Anthropic.MessageParam[]
+  compactedMessages: NormalizedMessageParam[]
   summary: string
   state: AutoCompactState
 }> {
@@ -73,9 +74,9 @@ export async function compactConversation(
     // Build compaction prompt
     const compactionPrompt = buildCompactionPrompt(strippedMessages)
 
-    const response = await client.messages.create({
+    const response = await provider.createMessage({
       model,
-      max_tokens: 8192,
+      maxTokens: 8192,
       system: 'You are a conversation summarizer. Create a detailed summary of the conversation that preserves all important context, decisions made, files modified, tool outputs, and current state. The summary should allow the conversation to continue seamlessly.',
       messages: [
         {
@@ -86,12 +87,12 @@ export async function compactConversation(
     })
 
     const summary = response.content
-      .filter((b): b is Anthropic.TextBlock => b.type === 'text')
-      .map((b) => b.text)
+      .filter((b) => b.type === 'text')
+      .map((b) => (b as { type: 'text'; text: string }).text)
       .join('\n')
 
     // Replace messages with summary
-    const compactedMessages: Anthropic.MessageParam[] = [
+    const compactedMessages: NormalizedMessageParam[] = [
       {
         role: 'user',
         content: `[Previous conversation summary]\n\n${summary}\n\n[End of summary - conversation continues below]`,
@@ -127,9 +128,9 @@ export async function compactConversation(
  * Strip images from messages for compaction safety.
  */
 function stripImagesFromMessages(
-  messages: Anthropic.MessageParam[],
-): Anthropic.MessageParam[] {
-  return messages.map((msg) => {
+  messages: any[],
+): any[] {
+  return messages.map((msg: any) => {
     if (typeof msg.content === 'string') return msg
 
     const filtered = (msg.content as any[]).filter((block: any) => {
@@ -143,7 +144,7 @@ function stripImagesFromMessages(
 /**
  * Build compaction prompt from messages.
  */
-function buildCompactionPrompt(messages: Anthropic.MessageParam[]): string {
+function buildCompactionPrompt(messages: any[]): string {
   const parts: string[] = ['Please summarize this conversation:\n']
 
   for (const msg of messages) {
@@ -179,10 +180,10 @@ function buildCompactionPrompt(messages: Anthropic.MessageParam[]): string {
  * to fit within token budgets.
  */
 export function microCompactMessages(
-  messages: Anthropic.MessageParam[],
+  messages: any[],
   maxToolResultChars: number = 50000,
-): Anthropic.MessageParam[] {
-  return messages.map((msg) => {
+): any[] {
+  return messages.map((msg: any) => {
     if (typeof msg.content === 'string') return msg
     if (!Array.isArray(msg.content)) return msg
 

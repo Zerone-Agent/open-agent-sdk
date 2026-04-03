@@ -8,7 +8,7 @@
 import { readFile, writeFile, mkdir, readdir, stat } from 'fs/promises'
 import { join } from 'path'
 import type { Message } from './types.js'
-import type Anthropic from '@anthropic-ai/sdk'
+import type { NormalizedMessageParam } from './providers/types.js'
 
 /**
  * Session metadata.
@@ -28,7 +28,7 @@ export interface SessionMetadata {
  */
 export interface SessionData {
   metadata: SessionMetadata
-  messages: Anthropic.MessageParam[]
+  messages: NormalizedMessageParam[]
 }
 
 /**
@@ -51,7 +51,7 @@ function getSessionPath(sessionId: string): string {
  */
 export async function saveSession(
   sessionId: string,
-  messages: Anthropic.MessageParam[],
+  messages: NormalizedMessageParam[],
   metadata: Partial<SessionMetadata>,
 ): Promise<void> {
   const dir = getSessionPath(sessionId)
@@ -146,7 +146,7 @@ export async function forkSession(
  */
 export async function getSessionMessages(
   sessionId: string,
-): Promise<Anthropic.MessageParam[]> {
+): Promise<NormalizedMessageParam[]> {
   const data = await loadSession(sessionId)
   return data?.messages || []
 }
@@ -156,7 +156,7 @@ export async function getSessionMessages(
  */
 export async function appendToSession(
   sessionId: string,
-  message: Anthropic.MessageParam,
+  message: NormalizedMessageParam,
 ): Promise<void> {
   const data = await loadSession(sessionId)
   if (!data) return

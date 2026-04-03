@@ -2,7 +2,17 @@
  * Core type definitions for the Agent SDK
  */
 
-import type Anthropic from '@anthropic-ai/sdk'
+// Content block types (provider-agnostic, compatible with Anthropic format)
+export type ContentBlockParam =
+  | { type: 'text'; text: string }
+  | { type: 'image'; source: any }
+  | { type: 'tool_use'; id: string; name: string; input: any }
+  | { type: 'tool_result'; tool_use_id: string; content: string | any[]; is_error?: boolean }
+
+export type ContentBlock =
+  | { type: 'text'; text: string }
+  | { type: 'tool_use'; id: string; name: string; input: any }
+  | { type: 'thinking'; thinking: string }
 
 // --------------------------------------------------------------------------
 // Message Types
@@ -12,7 +22,7 @@ export type MessageRole = 'user' | 'assistant'
 
 export interface ConversationMessage {
   role: MessageRole
-  content: string | Anthropic.ContentBlockParam[]
+  content: string | ContentBlockParam[]
 }
 
 export interface UserMessage {
@@ -26,7 +36,7 @@ export interface AssistantMessage {
   type: 'assistant'
   message: {
     role: 'assistant'
-    content: Anthropic.ContentBlock[]
+    content: ContentBlock[]
   }
   uuid: string
   timestamp: string
@@ -57,7 +67,7 @@ export interface SDKAssistantMessage {
   session_id?: string
   message: {
     role: 'assistant'
-    content: Anthropic.ContentBlock[]
+    content: ContentBlock[]
   }
   parent_tool_use_id?: string | null
 }
@@ -186,7 +196,7 @@ export interface ToolContext {
 export interface ToolResult {
   type: 'tool_result'
   tool_use_id: string
-  content: string | Anthropic.ToolResultBlockParam['content']
+  content: string | any[]
   is_error?: boolean
 }
 
@@ -202,8 +212,10 @@ export type PermissionMode =
   | 'dontAsk'
   | 'auto'
 
+export type PermissionBehavior = 'allow' | 'deny'
+
 export type CanUseToolResult = {
-  behavior: 'allow' | 'deny'
+  behavior: PermissionBehavior
   updatedInput?: unknown
   message?: string
 }
@@ -326,6 +338,11 @@ export interface ModelInfo {
 export interface AgentOptions {
   /** LLM model ID */
   model?: string
+  /**
+   * API type: 'anthropic-messages' or 'openai-completions'.
+   * Falls back to CODEANY_API_TYPE env var. Default: 'anthropic-messages'.
+   */
+  apiType?: import('./providers/types.js').ApiType
   /** API key. Falls back to CODEANY_API_KEY env var. */
   apiKey?: string
   /** API base URL override */
@@ -442,8 +459,8 @@ export interface QueryResult {
 export interface QueryEngineConfig {
   cwd: string
   model: string
-  apiKey?: string
-  baseURL?: string
+  /** LLM provider instance (created from apiType) */
+  provider: import('./providers/types.js').LLMProvider
   tools: ToolDefinition[]
   systemPrompt?: string
   appendSystemPrompt?: string
@@ -456,4 +473,8 @@ export interface QueryEngineConfig {
   includePartialMessages: boolean
   abortSignal?: AbortSignal
   agents?: Record<string, AgentDefinition>
+  /** Hook registry for lifecycle events */
+  hookRegistry?: import('./hooks.js').HookRegistry
+  /** Session ID for hook context */
+  sessionId?: string
 }

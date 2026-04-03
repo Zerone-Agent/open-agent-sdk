@@ -8,6 +8,14 @@
  *   import { createAgent } from 'open-agent-sdk'
  *   const agent = createAgent({ model: 'claude-sonnet-4-6' })
  *   for await (const event of agent.query('Hello')) { ... }
+ *
+ *   // OpenAI-compatible models
+ *   const agent = createAgent({
+ *     apiType: 'openai-completions',
+ *     model: 'gpt-4o',
+ *     apiKey: 'sk-...',
+ *     baseURL: 'https://api.openai.com/v1',
+ *   })
  */
 
 import type {
@@ -17,7 +25,6 @@ import type {
   ToolDefinition,
   CanUseToolFn,
   Message,
-  TokenUsage,
   PermissionMode,
 } from './types.js'
 import { QueryEngine } from './engine.js'
@@ -29,7 +36,10 @@ import {
   saveSession,
   loadSession,
 } from './session.js'
-import type Anthropic from '@anthropic-ai/sdk'
+import { createHookRegistry, type HookRegistry } from './hooks.js'
+import { initBundledSkills } from './skills/index.js'
+import { createProvider, type LLMProvider, type ApiType } from './providers/index.js'
+import type { NormalizedMessageParam } from './providers/types.js'
 
 // --------------------------------------------------------------------------
 // Agent class
@@ -39,14 +49,17 @@ export class Agent {
   private cfg: AgentOptions
   private toolPool: ToolDefinition[]
   private modelId: string
+  private apiType: ApiType
   private apiCredentials: { key?: string; baseUrl?: string }
+  private provider: LLMProvider
   private mcpLinks: MCPConnection[] = []
-  private history: Anthropic.MessageParam[] = []
+  private history: NormalizedMessageParam[] = []
   private messageLog: Message[] = []
   private setupDone: Promise<void>
   private sid: string
   private abortCtrl: AbortController | null = null
   private currentEngine: QueryEngine | null = null
+  private hookRegistry: HookRegistry
 
   constructor(options: AgentOptions = {}) {
     // Shallow copy to avoid mutating caller's object
@@ -57,13 +70,38 @@ export class Agent {
     this.modelId = this.cfg.model ?? this.readEnv('CODEANY_MODEL') ?? 'claude-sonnet-4-6'
     this.sid = this.cfg.sessionId ?? crypto.randomUUID()
 
-    // The underlying @anthropic-ai/sdk reads ANTHROPIC_API_KEY from process.env,
-    // so we bridge our resolved credentials into it.
-    if (this.apiCredentials.key) {
-      process.env.ANTHROPIC_API_KEY = this.apiCredentials.key
-    }
-    if (this.apiCredentials.baseUrl) {
-      process.env.ANTHROPIC_BASE_URL = this.apiCredentials.baseUrl
+    // Resolve API type
+    this.apiType = this.resolveApiType()
+
+    // Create LLM provider
+    this.provider = createProvider(this.apiType, {
+      apiKey: this.apiCredentials.key,
+      baseURL: this.apiCredentials.baseUrl,
+    })
+
+    // Initialize bundled skills
+    initBundledSkills()
+
+    // Build hook registry from options
+    this.hookRegistry = createHookRegistry()
+    if (this.cfg.hooks) {
+      // Convert AgentOptions hooks format to HookConfig
+      for (const [event, defs] of Object.entries(this.cfg.hooks)) {
+        for (const def of defs) {
+          for (const handler of def.hooks) {
+            this.hookRegistry.register(event as any, {
+              matcher: def.matcher,
+              timeout: def.timeout,
+              handler: async (input) => {
+                const result = await handler(input, input.toolUseId || '', {
+                  signal: this.abortCtrl?.signal || new AbortController().signal,
+                })
+                return result || undefined
+              },
+            })
+          }
+        }
+      }
     }
 
     // Build tool pool from options (supports ToolDefinition[], string[], or preset)
@@ -71,6 +109,41 @@ export class Agent {
 
     // Kick off async setup (MCP connections, agent registration, session resume)
     this.setupDone = this.setup()
+  }
+
+  /**
+   * Resolve API type from options, env, or model name heuristic.
+   */
+  private resolveApiType(): ApiType {
+    // Explicit option
+    if (this.cfg.apiType) return this.cfg.apiType
+
+    // Env var
+    const envType =
+      this.cfg.env?.CODEANY_API_TYPE ??
+      this.readEnv('CODEANY_API_TYPE')
+    if (envType === 'openai-completions' || envType === 'anthropic-messages') {
+      return envType
+    }
+
+    // Heuristic from model name
+    const model = this.modelId.toLowerCase()
+    if (
+      model.includes('gpt-') ||
+      model.includes('o1') ||
+      model.includes('o3') ||
+      model.includes('o4') ||
+      model.includes('deepseek') ||
+      model.includes('qwen') ||
+      model.includes('yi-') ||
+      model.includes('glm') ||
+      model.includes('mistral') ||
+      model.includes('gemma')
+    ) {
+      return 'openai-completions'
+    }
+
+    return 'anthropic-messages'
   }
 
   /** Pick API key and base URL from options or CODEANY_* env vars. */
@@ -208,12 +281,21 @@ export class Agent {
       }
     }
 
+    // Recreate provider if overrides change credentials or apiType
+    let provider = this.provider
+    if (overrides?.apiType || overrides?.apiKey || overrides?.baseURL) {
+      const resolvedApiType = overrides.apiType ?? this.apiType
+      provider = createProvider(resolvedApiType, {
+        apiKey: overrides.apiKey ?? this.apiCredentials.key,
+        baseURL: overrides.baseURL ?? this.apiCredentials.baseUrl,
+      })
+    }
+
     // Create query engine with current conversation state
     const engine = new QueryEngine({
       cwd,
       model: opts.model || this.modelId,
-      apiKey: this.apiCredentials.key,
-      baseURL: this.apiCredentials.baseUrl,
+      provider,
       tools,
       systemPrompt,
       appendSystemPrompt,
@@ -226,6 +308,8 @@ export class Agent {
       includePartialMessages: opts.includePartialMessages ?? false,
       abortSignal: this.abortCtrl.signal,
       agents: opts.agents,
+      hookRegistry: this.hookRegistry,
+      sessionId: this.sid,
     })
     this.currentEngine = engine
 
@@ -279,9 +363,9 @@ export class Agent {
       switch (ev.type) {
         case 'assistant': {
           // Extract the last assistant text (multi-turn: only final answer matters)
-          const fragments = ev.message.content
-            .filter((c): c is Anthropic.TextBlock => c.type === 'text')
-            .map((c) => c.text)
+          const fragments = (ev.message.content as any[])
+            .filter((c: any) => c.type === 'text')
+            .map((c: any) => c.text)
           if (fragments.length) collected.text = fragments.join('')
           break
         }
@@ -357,6 +441,13 @@ export class Agent {
    */
   getSessionId(): string {
     return this.sid
+  }
+
+  /**
+   * Get the current API type.
+   */
+  getApiType(): ApiType {
+    return this.apiType
   }
 
   /**

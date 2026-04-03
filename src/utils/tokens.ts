@@ -5,8 +5,6 @@
  * API-based exact counting when available.
  */
 
-import Anthropic from '@anthropic-ai/sdk'
-
 /**
  * Rough token estimation: ~4 chars per token (conservative).
  */
@@ -18,7 +16,7 @@ export function estimateTokens(text: string): number {
  * Estimate tokens for a message array.
  */
 export function estimateMessagesTokens(
-  messages: Anthropic.MessageParam[],
+  messages: Array<{ role: string; content: any }>,
 ): number {
   let total = 0
   for (const msg of messages) {
@@ -68,14 +66,25 @@ export function getTokenCountFromUsage(usage: {
  * Get the context window size for a model.
  */
 export function getContextWindowSize(model: string): number {
-  // Model context windows
+  // Anthropic model context windows
   if (model.includes('opus-4') && model.includes('1m')) return 1_000_000
   if (model.includes('opus-4')) return 200_000
   if (model.includes('sonnet-4')) return 200_000
   if (model.includes('haiku-4')) return 200_000
-
-  
   if (model.includes('claude-3')) return 200_000
+
+  // OpenAI model context windows
+  if (model.includes('gpt-4o')) return 128_000
+  if (model.includes('gpt-4-turbo')) return 128_000
+  if (model.includes('gpt-4-1')) return 1_000_000
+  if (model.includes('gpt-4')) return 128_000
+  if (model.includes('gpt-3.5')) return 16_385
+  if (model.includes('o1')) return 200_000
+  if (model.includes('o3')) return 200_000
+  if (model.includes('o4')) return 200_000
+
+  // DeepSeek models
+  if (model.includes('deepseek')) return 128_000
 
   // Default
   return 200_000
@@ -97,6 +106,7 @@ export function getAutoCompactThreshold(model: string): number {
  * Model pricing (USD per token).
  */
 export const MODEL_PRICING: Record<string, { input: number; output: number }> = {
+  // Anthropic models
   'claude-opus-4-6': { input: 15 / 1_000_000, output: 75 / 1_000_000 },
   'claude-opus-4-5': { input: 15 / 1_000_000, output: 75 / 1_000_000 },
   'claude-sonnet-4-6': { input: 3 / 1_000_000, output: 15 / 1_000_000 },
@@ -105,6 +115,19 @@ export const MODEL_PRICING: Record<string, { input: number; output: number }> = 
   'claude-3-5-sonnet': { input: 3 / 1_000_000, output: 15 / 1_000_000 },
   'claude-3-5-haiku': { input: 0.8 / 1_000_000, output: 4 / 1_000_000 },
   'claude-3-opus': { input: 15 / 1_000_000, output: 75 / 1_000_000 },
+
+  // OpenAI models
+  'gpt-4o': { input: 2.5 / 1_000_000, output: 10 / 1_000_000 },
+  'gpt-4o-mini': { input: 0.15 / 1_000_000, output: 0.6 / 1_000_000 },
+  'gpt-4-turbo': { input: 10 / 1_000_000, output: 30 / 1_000_000 },
+  'gpt-4-1': { input: 2 / 1_000_000, output: 8 / 1_000_000 },
+  'o1': { input: 15 / 1_000_000, output: 60 / 1_000_000 },
+  'o3': { input: 10 / 1_000_000, output: 40 / 1_000_000 },
+  'o4-mini': { input: 1.1 / 1_000_000, output: 4.4 / 1_000_000 },
+
+  // DeepSeek models
+  'deepseek-chat': { input: 0.27 / 1_000_000, output: 1.1 / 1_000_000 },
+  'deepseek-reasoner': { input: 0.55 / 1_000_000, output: 2.19 / 1_000_000 },
 }
 
 /**
