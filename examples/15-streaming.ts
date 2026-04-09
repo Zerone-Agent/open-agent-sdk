@@ -17,20 +17,16 @@ async function main() {
     thinking: { type: 'enabled', budgetTokens: 2000 },
   })
 
-  let partialText = ''
-  let thinkingText = ''
-
   for await (const event of agent.query(
-    'What is 27 * 43? Show your reasoning.',
+    '27 乘以 43 等于多少？请展示你的推理过程。',
   )) {
     switch (event.type) {
       case 'partial_message': {
         if (event.partial.type === 'text') {
-          partialText += event.partial.text
           process.stdout.write(event.partial.text)
         }
         if (event.partial.type === 'thinking') {
-          thinkingText += event.partial.text
+          process.stdout.write(`\x1b[90m${event.partial.text}\x1b[0m`)
         }
         break
       }
@@ -41,11 +37,6 @@ async function main() {
       case 'result': {
         console.log(`\n--- Result: ${event.subtype} ---`)
         console.log(`Tokens: ${event.usage?.input_tokens} in / ${event.usage?.output_tokens} out`)
-        console.log(`Complete text length: ${partialText.length} chars`)
-        if (thinkingText) {
-          console.log(`\n=== Thinking (推理过程) ===`)
-          console.log(thinkingText)
-        }
         if (event.errors) {
           console.log(`Errors: ${event.errors.join(', ')}`)
         }
