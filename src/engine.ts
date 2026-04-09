@@ -165,7 +165,6 @@ export class QueryEngine {
   private buildResponseFromChunks(chunks: import('./providers/types.js').StreamChunk[]): CreateMessageResponse {
     const content: import('./providers/types.js').NormalizedResponseBlock[] = []
     let currentBlock: import('./providers/types.js').NormalizedResponseBlock | null = null
-    const toolInputs: Map<number, string> = new Map()
 
     for (const chunk of chunks) {
       if (chunk.type === 'done') continue
@@ -185,10 +184,6 @@ export class QueryEngine {
       }
 
       if (chunk.type === 'tool_use') {
-        if (chunk.name) {
-          // Start of tool use
-          toolInputs.set(chunk.index, '')
-        }
         if (chunk.input !== undefined) {
           // Complete tool use
           let input: any
@@ -331,10 +326,17 @@ export class QueryEngine {
 
       try {
         if (this.config.includePartialMessages) {
+          // Check if provider supports streaming
+          if (!this.provider.createMessageStream) {
+            throw new Error('Streaming not supported by this provider')
+          }
+
           // Streaming mode
+          // Note: Retry is not applied here because we yield partial messages as they arrive.
+          // If the stream fails mid-way, we let the error propagate.
           const chunks: import('./providers/types.js').StreamChunk[] = []
 
-          for await (const chunk of this.provider.createMessageStream!({
+          for await (const chunk of this.provider.createMessageStream({
             model: this.config.model,
             maxTokens: this.config.maxTokens,
             system: systemPrompt,
