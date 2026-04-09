@@ -229,18 +229,18 @@ export class OpenAIProvider implements LLMProvider {
           if (tc.id) {
             call.id = tc.id
           }
+        }
+      }
+    }
 
-          // Yield complete tool_use when finished
-          if (choice.finish_reason === 'tool_calls' || choice.finish_reason === 'stop') {
-            if (call.name) {
-              yield {
-                type: 'tool_use',
-                index,
-                name: call.name,
-                input: call.arguments,
-              }
-            }
-          }
+    // Yield all accumulated tool calls after stream ends
+    for (const [index, call] of toolCalls) {
+      if (call.name) {
+        yield {
+          type: 'tool_use',
+          index,
+          name: call.name,
+          input: call.arguments,
         }
       }
     }
