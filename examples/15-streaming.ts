@@ -40,6 +40,9 @@ async function main() {
         console.log(`\n--- Result: ${event.subtype} ---`)
         console.log(`Tokens: ${event.usage?.input_tokens} in / ${event.usage?.output_tokens} out`)
         console.log(`Complete text length: ${partialText.length} chars`)
+        if (event.errors) {
+          console.log(`Errors: ${event.errors.join(', ')}`)
+        }
       }
     }
   }
