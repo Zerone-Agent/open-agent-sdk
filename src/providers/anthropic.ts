@@ -83,6 +83,34 @@ export class AnthropicProvider implements LLMProvider {
     const toolInputs: Map<number, string> = new Map()
 
     for await (const event of stream) {
+      if (event.type === 'message_start') {
+        const usage = (event as any).message?.usage
+        if (usage) {
+          yield {
+            type: 'usage',
+            index: -1,
+            usage: {
+              input_tokens: usage.input_tokens || 0,
+              output_tokens: 0,
+            },
+          }
+        }
+      }
+
+      if (event.type === 'message_delta') {
+        const usage = (event as any).usage
+        if (usage) {
+          yield {
+            type: 'usage',
+            index: -1,
+            usage: {
+              input_tokens: 0,
+              output_tokens: usage.output_tokens || 0,
+            },
+          }
+        }
+      }
+
       if (event.type === 'content_block_start') {
         currentBlockIndex = event.index
         

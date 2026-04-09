@@ -163,6 +163,7 @@ export class OpenAIProvider implements LLMProvider {
       max_tokens: params.maxTokens,
       messages,
       stream: true,
+      stream_options: { include_usage: true },
     }
 
     if (tools && tools.length > 0) {
@@ -191,6 +192,18 @@ export class OpenAIProvider implements LLMProvider {
     const toolCalls: Map<number, { id: string; name: string; arguments: string }> = new Map()
 
     for await (const chunk of parseSSEStream(response)) {
+      // Handle usage in final chunk
+      if (chunk.usage) {
+        yield {
+          type: 'usage',
+          index: -1,
+          usage: {
+            input_tokens: chunk.usage.prompt_tokens || 0,
+            output_tokens: chunk.usage.completion_tokens || 0,
+          },
+        }
+      }
+
       const choice = chunk.choices?.[0]
       if (!choice) continue
 
@@ -234,7 +247,7 @@ export class OpenAIProvider implements LLMProvider {
     }
 
     // Yield all accumulated tool calls after stream ends
-    for (const [index, call] of toolCalls) {
+    for await (const [index, call] of toolCalls) {
       if (call.name) {
         yield {
           type: 'tool_use',

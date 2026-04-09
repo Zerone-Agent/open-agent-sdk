@@ -335,6 +335,7 @@ export class QueryEngine {
           // Note: Retry is not applied here because we yield partial messages as they arrive.
           // If the stream fails mid-way, we let the error propagate.
           const chunks: import('./providers/types.js').StreamChunk[] = []
+          const streamUsage = { input_tokens: 0, output_tokens: 0 }
 
           for await (const chunk of this.provider.createMessageStream({
             model: this.config.model,
@@ -353,6 +354,12 @@ export class QueryEngine {
           })) {
             chunks.push(chunk)
 
+            // Accumulate usage from stream
+            if (chunk.type === 'usage' && chunk.usage) {
+              streamUsage.input_tokens += chunk.usage.input_tokens
+              streamUsage.output_tokens += chunk.usage.output_tokens
+            }
+
             // Yield partial messages for text and thinking
             if (chunk.type === 'text' || chunk.type === 'thinking') {
               yield {
@@ -366,6 +373,10 @@ export class QueryEngine {
           }
 
           response = this.buildResponseFromChunks(chunks)
+          // Use stream usage if available
+          if (streamUsage.input_tokens > 0 || streamUsage.output_tokens > 0) {
+            response.usage = streamUsage
+          }
         } else {
           // Non-streaming mode
           response = await withRetry(
