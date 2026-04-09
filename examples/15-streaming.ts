@@ -17,17 +17,23 @@ async function main() {
     thinking: { type: 'enabled', budgetTokens: 2000 },
   })
 
+  let lastType = ''
+
   for await (const event of agent.query(
     '27 乘以 43 等于多少？请展示你的推理过程。',
   )) {
     switch (event.type) {
       case 'partial_message': {
         if (event.partial.type === 'text') {
+          if (lastType === 'thinking') {
+            process.stdout.write('\n\n')
+          }
           process.stdout.write(event.partial.text)
         }
         if (event.partial.type === 'thinking') {
           process.stdout.write(`\x1b[90m${event.partial.text}\x1b[0m`)
         }
+        lastType = event.partial.type
         break
       }
       case 'assistant': {
