@@ -14,12 +14,14 @@ async function main() {
     model: process.env.CODEANY_MODEL || 'claude-sonnet-4-6',
     maxTurns: 10,
     includePartialMessages: true,
+    thinking: { type: 'enabled', budgetTokens: 2000 },
   })
 
   let partialText = ''
+  let thinkingText = ''
 
   for await (const event of agent.query(
-    'Explain what streaming means in AI context in 2-3 sentences.',
+    'What is 27 * 43? Show your reasoning.',
   )) {
     switch (event.type) {
       case 'partial_message': {
@@ -28,7 +30,7 @@ async function main() {
           process.stdout.write(event.partial.text)
         }
         if (event.partial.type === 'thinking') {
-          process.stdout.write(`[thinking: ${event.partial.text}]`)
+          thinkingText += event.partial.text
         }
         break
       }
@@ -40,6 +42,10 @@ async function main() {
         console.log(`\n--- Result: ${event.subtype} ---`)
         console.log(`Tokens: ${event.usage?.input_tokens} in / ${event.usage?.output_tokens} out`)
         console.log(`Complete text length: ${partialText.length} chars`)
+        if (thinkingText) {
+          console.log(`\n=== Thinking (推理过程) ===`)
+          console.log(thinkingText)
+        }
         if (event.errors) {
           console.log(`Errors: ${event.errors.join(', ')}`)
         }
