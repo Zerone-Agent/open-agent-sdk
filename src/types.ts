@@ -117,6 +117,7 @@ export interface SDKSystemMessage {
   uuid?: string
   session_id: string
   tools: string[]
+  skills?: string[]
   model: string
   cwd: string
   mcp_servers: Array<{ name: string; status: string }>

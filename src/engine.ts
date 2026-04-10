@@ -45,7 +45,7 @@ import {
 import { getSystemContext, getUserContext } from './utils/context.js'
 import { normalizeMessagesForAPI } from './utils/messages.js'
 import type { HookRegistry, HookInput, HookOutput } from './hooks.js'
-import { formatSkillsForPrompt } from './skills/registry.js'
+import { formatSkillsForPrompt, getUserInvocableSkills } from './skills/registry.js'
 
 // ============================================================================
 // Tool format conversion
@@ -294,11 +294,13 @@ export class QueryEngine {
     const systemPrompt = await buildSystemPrompt(this.config)
 
     // Emit init system message
+    const skills = getUserInvocableSkills()
     yield {
       type: 'system',
       subtype: 'init',
       session_id: this.sessionId,
       tools: this.config.tools.map(t => t.name),
+      skills: skills.map(s => s.name),
       model: this.config.model,
       cwd: this.config.cwd,
       mcp_servers: [],
