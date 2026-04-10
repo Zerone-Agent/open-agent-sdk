@@ -45,6 +45,7 @@ import {
 import { getSystemContext, getUserContext } from './utils/context.js'
 import { normalizeMessagesForAPI } from './utils/messages.js'
 import type { HookRegistry, HookInput, HookOutput } from './hooks.js'
+import { formatSkillsForPrompt } from './skills/registry.js'
 
 // ============================================================================
 // Tool format conversion
@@ -101,6 +102,14 @@ async function buildSystemPrompt(config: QueryEngineConfig): Promise<string> {
     for (const [name, def] of Object.entries(config.agents)) {
       parts.push(`- **${name}**: ${def.description}`)
     }
+  }
+
+  // Add skills
+  const skillsText = formatSkillsForPrompt()
+  if (skillsText) {
+    parts.push('\n# Available Skills\n')
+    parts.push(skillsText)
+    parts.push('\nUse the Skill tool to invoke a skill by name with optional arguments.')
   }
 
   // System context (git status, etc.)
