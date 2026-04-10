@@ -46,6 +46,8 @@ import { getSystemContext, getUserContext } from './utils/context.js'
 import { normalizeMessagesForAPI } from './utils/messages.js'
 import type { HookRegistry, HookInput, HookOutput } from './hooks.js'
 import { formatSkillsForPrompt, getUserInvocableSkills } from './skills/registry.js'
+import { SYSTEM_PROMPTS } from './prompts/system-prompts.js'
+import { loadClaudeMd } from './utils/claude-md.js'
 
 // ============================================================================
 // Tool format conversion
@@ -75,20 +77,8 @@ interface ToolUseBlock {
 // System Prompt Builder
 // ============================================================================
 
-async function buildSystemPrompt(config: QueryEngineConfig): Promise<string> {
-  if (config.systemPrompt) {
-    const base = config.systemPrompt
-    return config.appendSystemPrompt
-      ? base + '\n\n' + config.appendSystemPrompt
-      : base
-  }
-
+async function buildEnvironmentPrompt(config: QueryEngineConfig): Promise<string> {
   const parts: string[] = []
-
-  parts.push(
-    'You are an AI assistant with access to tools. Use the tools provided to help the user accomplish their tasks.',
-    'You should use tools when they would help you complete the task more accurately or efficiently.',
-  )
 
   // List available tools with descriptions
   parts.push('\n# Available Tools\n')
@@ -137,11 +127,27 @@ async function buildSystemPrompt(config: QueryEngineConfig): Promise<string> {
   // Working directory
   parts.push(`\n# Working Directory\n${config.cwd}`)
 
-  if (config.appendSystemPrompt) {
-    parts.push('\n' + config.appendSystemPrompt)
+  // Load CLAUDE.md
+  const claudeMdContent = await loadClaudeMd(config.cwd, config.settingSources)
+  if (claudeMdContent) {
+    parts.push('\n# CLAUDE.md Instructions\n')
+    parts.push(claudeMdContent)
   }
 
   return parts.join('\n')
+}
+
+async function buildSystemPrompt(config: QueryEngineConfig): Promise<string> {
+  const basePrompt = config.systemPrompt || SYSTEM_PROMPTS.default
+  const envPrompt = await buildEnvironmentPrompt(config)
+
+  let result = basePrompt + '\n\n' + envPrompt
+
+  if (config.appendSystemPrompt) {
+    result += '\n\n' + config.appendSystemPrompt
+  }
+
+  return result
 }
 
 // ============================================================================
