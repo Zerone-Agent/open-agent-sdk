@@ -327,6 +327,8 @@ export interface OutputFormat {
 
 export type SettingSource = 'user' | 'project' | 'local'
 
+export type SystemPromptPreset = 'default' | 'claude_code'
+
 // --------------------------------------------------------------------------
 // Model Info
 // --------------------------------------------------------------------------
@@ -356,7 +358,7 @@ export interface AgentOptions {
   /** Working directory for file/shell tools */
   cwd?: string
   /** System prompt override or preset */
-  systemPrompt?: string | { type: 'preset'; preset: 'default'; append?: string }
+  systemPrompt?: string | { type: 'preset'; preset: SystemPromptPreset; append?: string }
   /** Append to default system prompt */
   appendSystemPrompt?: string
   /** Available tools (ToolDefinition[] or string[] preset) */
@@ -483,4 +485,6 @@ export interface QueryEngineConfig {
   hookRegistry?: import('./hooks.js').HookRegistry
   /** Session ID for hook context */
   sessionId?: string
+  /** Load settings from filesystem */
+  settingSources?: SettingSource[]
 }
