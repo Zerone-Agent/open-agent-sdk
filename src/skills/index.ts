@@ -23,3 +23,6 @@ export {
 
 // Bundled skills
 export { initBundledSkills } from './bundled/index.js'
+
+// Filesystem loading
+export { loadSkillsFromFilesystem } from './filesystem.js'
