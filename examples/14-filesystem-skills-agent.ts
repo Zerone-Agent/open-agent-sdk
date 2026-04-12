@@ -49,7 +49,9 @@ Arguments: \${args}
     const agent = createAgent({
       cwd: testDir,
       settingSources: ['project'],
-      maxTurns: 2,
+      maxTurns: 10,
+      thinking: { type: 'enabled', budgetTokens: 8000 },
+
     })
 
     // Wait for skills to load
