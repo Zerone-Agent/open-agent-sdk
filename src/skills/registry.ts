@@ -91,12 +91,52 @@ export function clearSkills(): void {
 }
 
 /**
- * Format skills listing for system prompt injection.
+ * Format skills for system prompt injection — verbose XML format.
+ *
+ * Produces a structured XML block that gives the model a complete
+ * cognitive map of available skills, including file locations so
+ * the model can reference them when invoking the skill tool.
+ *
+ * Design rationale from OpenCode:
+ * "agents seem to ingest the information about skills a bit better
+ * if we present a more verbose version of them here and a less
+ * verbose version in tool description"
+ */
+export function formatSkillsForSystemPrompt(): string {
+  const invocable = getUserInvocableSkills()
+  if (invocable.length === 0) return ''
+
+  const sorted = [...invocable].sort((a, b) => a.name.localeCompare(b.name))
+
+  const skillXml = sorted.map((skill) => {
+    const locationLine = skill.location
+      ? `\n    <location>file://${skill.location}</location>`
+      : ''
+    return [
+      '  <skill>',
+      `    <name>${skill.name}</name>`,
+      `    <description>${skill.description}</description>${locationLine}`,
+      '  </skill>',
+    ].join('\n')
+  })
+
+  return [
+    '<available_skills>',
+    ...skillXml,
+    '</available_skills>',
+  ].join('\n')
+}
+
+/**
+ * Format skills for tool description injection — concise Markdown format.
+ *
+ * Produces a compact bullet list for embedding in the Skill tool's
+ * description field. Kept brief so it doesn't dominate the tool listing.
  *
  * Uses a budget system: skills listing gets a limited character budget
  * to avoid bloating the context window.
  */
-export function formatSkillsForPrompt(
+export function formatSkillsForToolDescription(
   contextWindowTokens?: number,
 ): string {
   const invocable = getUserInvocableSkills()
@@ -110,24 +150,30 @@ export function formatSkillsForPrompt(
     ? Math.floor(contextWindowTokens * 0.01 * CHARS_PER_TOKEN)
     : DEFAULT_BUDGET
 
+  const sorted = [...invocable].sort((a, b) => a.name.localeCompare(b.name))
   const lines: string[] = []
   let used = 0
 
-  for (const skill of invocable) {
-    const desc = skill.description.length > MAX_DESC_CHARS
-      ? skill.description.slice(0, MAX_DESC_CHARS) + '...'
-      : skill.description
+  for (const skill of sorted) {
+    const desc =
+      skill.description.length > MAX_DESC_CHARS
+        ? skill.description.slice(0, MAX_DESC_CHARS) + '...'
+        : skill.description
 
-    const trigger = skill.whenToUse
-      ? ` TRIGGER when: ${skill.whenToUse}`
-      : ''
-
-    const line = `- ${skill.name}: ${desc}${trigger}`
+    const argHint = skill.argumentHint ? ` (args: \`${skill.argumentHint}\`)` : ''
+    const line = `- **${skill.name}**${argHint}: ${desc}`
 
     if (used + line.length > budget) break
     lines.push(line)
     used += line.length
   }
 
-  return lines.join('\n')
+  return ['## Available Skills', ...lines].join('\n')
+}
+
+/**
+ * @deprecated Use formatSkillsForSystemPrompt() or formatSkillsForToolDescription() instead.
+ */
+export function formatSkillsForPrompt(contextWindowTokens?: number): string {
+  return formatSkillsForToolDescription(contextWindowTokens)
 }

@@ -170,6 +170,8 @@ export {
   unregisterSkill,
   clearSkills,
   formatSkillsForPrompt,
+  formatSkillsForSystemPrompt,
+  formatSkillsForToolDescription,
   initBundledSkills,
   loadSkillsFromFilesystem,
 } from './skills/index.js'

@@ -102,12 +102,16 @@ async function loadSkillFile(
     join(baseDir, skillName)
   )
 
+  const skillDir = join(baseDir, skillName)
+
   const definition: SkillDefinition = {
     name: frontmatter.name || skillName,
     description: frontmatter.description,
     model: frontmatter.model,
     allowedTools: frontmatter.allowedTools,
     userInvocable: frontmatter.userInvocable ?? true,
+    location: skillPath,
+    skillDir,
     async getPrompt(args: string): Promise<SkillContentBlock[]> {
       let text = finalBody
       if (args) {

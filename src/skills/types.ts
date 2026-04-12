@@ -60,6 +60,19 @@ export interface SkillDefinition {
   agent?: string
 
   /**
+   * Absolute path to the SKILL.md file on disk.
+   * Only set for filesystem-loaded skills; undefined for bundled skills.
+   */
+  location?: string
+
+  /**
+   * Absolute path to the skill's root directory.
+   * Used to resolve relative paths referenced inside SKILL.md.
+   * Only set for filesystem-loaded skills; undefined for bundled skills.
+   */
+  skillDir?: string
+
+  /**
    * Generate the prompt content blocks for this skill.
    *
    * @param args - User-provided arguments (e.g., from "/simplify focus on error handling")

@@ -45,7 +45,7 @@ import {
 import { getSystemContext, getUserContext } from './utils/context.js'
 import { normalizeMessagesForAPI } from './utils/messages.js'
 import type { HookRegistry, HookInput, HookOutput } from './hooks.js'
-import { formatSkillsForPrompt, getUserInvocableSkills } from './skills/registry.js'
+import { formatSkillsForSystemPrompt, getUserInvocableSkills } from './skills/registry.js'
 import { SYSTEM_PROMPTS } from './prompts/system-prompts.js'
 import { loadClaudeMd } from './utils/claude-md.js'
 
@@ -81,7 +81,7 @@ async function buildEnvironmentPrompt(config: QueryEngineConfig): Promise<string
   const parts: string[] = []
 
   // List available tools with descriptions
-  parts.push('\n# Available Tools\n')
+  parts.push('# Available Tools\n')
   for (const tool of config.tools) {
     parts.push(`- **${tool.name}**: ${tool.description}`)
   }
@@ -94,12 +94,12 @@ async function buildEnvironmentPrompt(config: QueryEngineConfig): Promise<string
     }
   }
 
-  // Add skills
-  const skillsText = formatSkillsForPrompt()
-  if (skillsText) {
-    parts.push('\n# Available Skills\n')
-    parts.push(skillsText)
-    parts.push('\nUse the Skill tool to invoke a skill by name with optional arguments.')
+  // Add skills — verbose XML format builds a complete cognitive map for the model
+  const skillsXml = formatSkillsForSystemPrompt()
+  if (skillsXml) {
+    parts.push('\nSkills provide specialized instructions and workflows for specific tasks.')
+    parts.push('Use the skill tool to load a skill when a task matches its description.\n')
+    parts.push(skillsXml)
   }
 
   // System context (git status, etc.)

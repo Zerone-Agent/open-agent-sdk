@@ -19,6 +19,8 @@ export {
   unregisterSkill,
   clearSkills,
   formatSkillsForPrompt,
+  formatSkillsForSystemPrompt,
+  formatSkillsForToolDescription,
 } from './registry.js'
 
 // Bundled skills

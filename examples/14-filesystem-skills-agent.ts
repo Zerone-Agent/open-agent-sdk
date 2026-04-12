@@ -60,7 +60,14 @@ Arguments: \${args}
 
       if (event.type === 'system') {
         console.log('--- System Message ---')
-        console.log(JSON.stringify(event, null, 2))
+        const { system_prompt, ...rest } = event as any
+        console.log(JSON.stringify(rest, null, 2))
+        if (system_prompt) {
+          console.log('  "system_prompt":')
+          console.log('---')
+          console.log(system_prompt)
+          console.log('---')
+        }
       } else if (event.type === 'assistant') {
         console.log('--- Assistant Message ---')
         console.log(JSON.stringify(event.message, null, 2))
