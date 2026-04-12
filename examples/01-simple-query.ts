@@ -16,26 +16,44 @@ async function main() {
     maxTurns: 10,
   })
 
-  for await (const event of agent.query(
-    'Read package.json and tell me the project name and version in one sentence.',
-  )) {
+  const userPrompt = 'Read package.json and tell me the project name and version in one sentence.'
+
+  console.log('=== USER REQUEST ===')
+  console.log(userPrompt)
+  console.log('\n')
+
+  let turnCount = 0
+
+  for await (const event of agent.query(userPrompt)) {
     const msg = event as any
 
     if (msg.type === 'assistant') {
-      // Print tool calls
+      turnCount++
+      console.log(`\n=== LLM RESPONSE (Turn ${turnCount}) ===`)
       for (const block of msg.message?.content || []) {
         if (block.type === 'tool_use') {
-          console.log(`[Tool] ${block.name}(${JSON.stringify(block.input).slice(0, 80)})`)
+          console.log(`\n[Tool Call]`)
+          console.log(`  id: ${block.id}`)
+          console.log(`  name: ${block.name}`)
+          console.log(`  input: ${JSON.stringify(block.input, null, 2)}`)
         }
         if (block.type === 'text') {
-          console.log(`\nAssistant: ${block.text}`)
+          console.log(`\n[Text Response]\n${block.text}`)
         }
       }
     }
 
+    if (msg.type === 'tool_result') {
+      console.log(`\n=== TOOL RESULT ===`)
+      console.log(`  tool_name: ${msg.result.tool_name}`)
+      console.log(`  output: ${msg.result.output}`)
+    }
+
     if (msg.type === 'result') {
-      console.log(`\n--- Result: ${msg.subtype} ---`)
-      console.log(`Tokens: ${msg.usage?.input_tokens} in / ${msg.usage?.output_tokens} out`)
+      console.log(`\n=== FINAL RESULT ===`)
+      console.log(`  subtype: ${msg.subtype}`)
+      console.log(`  num_turns: ${msg.num_turns}`)
+      console.log(`  tokens: ${msg.usage?.input_tokens} in / ${msg.usage?.output_tokens} out`)
     }
   }
 }

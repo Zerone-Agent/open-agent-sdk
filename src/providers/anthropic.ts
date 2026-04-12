@@ -79,7 +79,6 @@ export class AnthropicProvider implements LLMProvider {
 
     const stream = await this.client.messages.create(requestParams)
 
-    let currentBlockIndex = -1
     const toolInputs: Map<number, string> = new Map()
     const toolUseIds: Map<number, string> = new Map()
 
@@ -113,8 +112,6 @@ export class AnthropicProvider implements LLMProvider {
       }
 
       if (event.type === 'content_block_start') {
-        currentBlockIndex = event.index
-        
         if (event.content_block.type === 'tool_use') {
           const toolId = (event.content_block as any).id || ''
           toolUseIds.set(event.index, toolId)
@@ -134,7 +131,7 @@ export class AnthropicProvider implements LLMProvider {
         if (delta.type === 'text_delta') {
           yield {
             type: 'text',
-            index: currentBlockIndex,
+            index: event.index,
             delta: delta.text,
           }
         }
@@ -142,14 +139,14 @@ export class AnthropicProvider implements LLMProvider {
         if (delta.type === 'thinking_delta') {
           yield {
             type: 'thinking',
-            index: currentBlockIndex,
+            index: event.index,
             delta: delta.thinking,
           }
         }
         
         if (delta.type === 'input_json_delta') {
-          const existing = toolInputs.get(currentBlockIndex) || ''
-          toolInputs.set(currentBlockIndex, existing + delta.partial_json)
+          const existing = toolInputs.get(event.index) || ''
+          toolInputs.set(event.index, existing + delta.partial_json)
         }
       }
       
