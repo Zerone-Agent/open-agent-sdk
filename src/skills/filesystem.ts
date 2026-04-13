@@ -1,7 +1,7 @@
 /**
  * Filesystem Skills Loader
  *
- * Loads SKILL.md files from .codeany/skills/ directories.
+ * Loads SKILL.md files from .openagent/skills/ directories.
  */
 
 import { readdir, readFile } from 'fs/promises'
@@ -35,17 +35,17 @@ export async function loadSkillsFromFilesystem(
   const errors: Error[] = []
   let loaded = 0
 
-  // User-level skills (~/.codeany/skills/)
+  // User-level skills (~/.openagent/skills/)
   if (settingSources.includes('user')) {
-    const userSkillsDir = join(homedir(), '.codeany', 'skills')
+    const userSkillsDir = join(homedir(), '.openagent', 'skills')
     const result = await loadSkillsFromDir(userSkillsDir)
     loaded += result.loaded
     errors.push(...result.errors)
   }
 
-  // Project-level skills (./.codeany/skills/)
+  // Project-level skills (./.openagent/skills/)
   if (settingSources.includes('project')) {
-    const projectSkillsDir = join(cwd, '.codeany', 'skills')
+    const projectSkillsDir = join(cwd, '.openagent', 'skills')
     const result = await loadSkillsFromDir(projectSkillsDir)
     loaded += result.loaded
     errors.push(...result.errors)
@@ -98,7 +98,7 @@ async function loadSkillFile(
   const { frontmatter, body } = parseSkillMarkdown(content)
 
   const finalBody = body.replace(
-    /\$\{CLAUDE_SKILL_DIR\}/g,
+    /\$\{OPENAGENT_SKILL_DIR\}/g,
     join(baseDir, skillName)
   )
 

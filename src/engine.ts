@@ -27,9 +27,7 @@ import type {
   NormalizedTool,
 } from './providers/types.js'
 import {
-  estimateMessagesTokens,
   estimateCost,
-  getAutoCompactThreshold,
 } from './utils/tokens.js'
 import {
   shouldAutoCompact,
@@ -47,7 +45,7 @@ import { normalizeMessagesForAPI } from './utils/messages.js'
 import type { HookRegistry, HookInput, HookOutput } from './hooks.js'
 import { formatSkillsForSystemPrompt, getUserInvocableSkills } from './skills/registry.js'
 import { SYSTEM_PROMPTS } from './prompts/system-prompts.js'
-import { loadClaudeMd } from './utils/claude-md.js'
+import { loadAgentsMd } from './utils/agents-md.js'
 
 // ============================================================================
 // Tool format conversion
@@ -105,10 +103,10 @@ async function buildEnvironmentPrompt(config: QueryEngineConfig): Promise<string
   }
 
   // Load AGENTS.md instructions
-  const claudeMdContent = await loadClaudeMd(config.cwd, config.settingSources)
-  if (claudeMdContent) {
+  const agentsMdContent = await loadAgentsMd(config.cwd, config.settingSources)
+  if (agentsMdContent) {
     parts.push('\n# Instructions\n')
-    parts.push(claudeMdContent)
+    parts.push(agentsMdContent)
   }
 
   return parts.join('\n')

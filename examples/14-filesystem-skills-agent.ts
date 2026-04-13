@@ -1,7 +1,7 @@
 /**
  * Example 14: Filesystem Skills
  *
- * Demonstrates loading skills from .codeany/skills/ directory.
+ * Demonstrates loading skills from .openagent/skills/ directory.
  */
 import { mkdir, writeFile, rm } from 'fs/promises'
 import { join } from 'path'
@@ -12,7 +12,7 @@ async function main() {
 
   // Setup: Create test skill directory
   const testDir = join(process.cwd(), '.test-example-14')
-  const skillDir = join(testDir, '.codeany', 'skills', 'example-skill')
+  const skillDir = join(testDir, '.openagent', 'skills', 'example-skill')
 
   await mkdir(skillDir, { recursive: true })
 
@@ -39,7 +39,7 @@ allowed-tools:
 
 This skill demonstrates filesystem loading.
 
-Use the Read tool to examine files in: \${CLAUDE_SKILL_DIR}
+Use the Read tool to examine files in: \${OPENAGENT_SKILL_DIR}
 
 Arguments: \${args}
 `)
