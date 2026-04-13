@@ -8,7 +8,7 @@
  * - Platform
  * - Current date
  *
- * Project instructions (CLAUDE.md) are handled separately by claude-md.ts.
+ * Project instructions (AGENTS.md) are handled separately by claude-md.ts.
  */
 
 import { execSync } from 'child_process'

@@ -1,7 +1,7 @@
 /**
  * Example 15: System Prompt Preset Alignment
  *
- * Tests the new system prompt presets and CLAUDE.md loading.
+ * Tests the new system prompt presets and AGENTS.md loading.
  *
  * Run: npx tsx examples/15-system-preset-alignment.ts
  */

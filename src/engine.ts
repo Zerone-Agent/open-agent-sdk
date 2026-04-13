@@ -104,7 +104,7 @@ async function buildEnvironmentPrompt(config: QueryEngineConfig): Promise<string
     parts.push(skillsXml)
   }
 
-  // Load CLAUDE.md instructions
+  // Load AGENTS.md instructions
   const claudeMdContent = await loadClaudeMd(config.cwd, config.settingSources)
   if (claudeMdContent) {
     parts.push('\n# Instructions\n')
@@ -360,11 +360,11 @@ export class QueryEngine {
             tools: tools.length > 0 ? tools : undefined,
             thinking:
               this.config.thinking?.type === 'enabled' &&
-              this.config.thinking.budgetTokens
+                this.config.thinking.budgetTokens
                 ? {
-                    type: 'enabled',
-                    budget_tokens: this.config.thinking.budgetTokens,
-                  }
+                  type: 'enabled',
+                  budget_tokens: this.config.thinking.budgetTokens,
+                }
                 : undefined,
           })) {
             chunks.push(chunk)
@@ -404,11 +404,11 @@ export class QueryEngine {
                 tools: tools.length > 0 ? tools : undefined,
                 thinking:
                   this.config.thinking?.type === 'enabled' &&
-                  this.config.thinking.budgetTokens
+                    this.config.thinking.budgetTokens
                     ? {
-                        type: 'enabled',
-                        budget_tokens: this.config.thinking.budgetTokens,
-                      }
+                      type: 'enabled',
+                      budget_tokens: this.config.thinking.budgetTokens,
+                    }
                     : undefined,
               })
             },

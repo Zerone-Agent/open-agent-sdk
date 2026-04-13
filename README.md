@@ -204,7 +204,7 @@ console.log(result.text);
 
 #### Filesystem Skills (Claude Code compatible)
 
-Create `.openagent/skills/my-skill/SKILL.md`:
+Create `.codeany/skills/my-skill/SKILL.md`:
 
 ```yaml
 ---
@@ -225,19 +225,19 @@ import { createAgent } from "@codeany/open-agent-sdk";
 
 const agent = createAgent({
   cwd: "/path/to/project",
-  settingSources: ["project"], // Load from .openagent/skills/
+  settingSources: ["project"], // Load from .codeany/skills/
 });
 
 // Or load user-level skills:
 const agent = createAgent({
-  settingSources: ["user"], // Load from ~/.openagent/skills/
+  settingSources: ["user"], // Load from ~/.codeany/skills/
 });
 ```
 
 **Setting source priority:**
 
-- `['user']`: Load from `~/.openagent/skills/`
-- `['project']`: Load from `${cwd}/.openagent/skills/`
+- `['user']`: Load from `~/.codeany/skills/`
+- `['project']`: Load from `${cwd}/.codeany/skills/`
 - `['user', 'project']`: Load both (project skills override user skills)
 
 ### Hooks (lifecycle events)
