@@ -14,7 +14,7 @@ export async function loadClaudeMd(
   const parts: string[] = []
 
   if (settingSources.includes('user')) {
-    const userPath = join(homedir(), '.claude', 'CLAUDE.md')
+    const userPath = join(homedir(), '.openagent', 'CLAUDE.md')
     const content = await safeReadFile(userPath)
     if (content) {
       parts.push(`## User-level Instructions\n${content}`)
@@ -22,7 +22,7 @@ export async function loadClaudeMd(
   }
 
   if (settingSources.includes('project')) {
-    const projectHiddenPath = join(cwd, '.claude', 'CLAUDE.md')
+    const projectHiddenPath = join(cwd, '.openagent', 'CLAUDE.md')
     const projectPath = join(cwd, 'CLAUDE.md')
 
     const content = await safeReadFile(projectHiddenPath) || await safeReadFile(projectPath)

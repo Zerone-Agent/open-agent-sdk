@@ -1,7 +1,7 @@
 /**
  * Example 14: Filesystem Skills
  *
- * Demonstrates loading skills from .claude/skills/ directory.
+ * Demonstrates loading skills from .openagent/skills/ directory.
  */
 import { mkdir, writeFile, rm } from 'fs/promises'
 import { join } from 'path'
@@ -12,7 +12,7 @@ async function main() {
 
   // Setup: Create test skill directory
   const testDir = join(process.cwd(), '.test-example-14')
-  const skillDir = join(testDir, '.claude', 'skills', 'example-skill')
+  const skillDir = join(testDir, '.openagent', 'skills', 'example-skill')
 
   await mkdir(skillDir, { recursive: true })
 
