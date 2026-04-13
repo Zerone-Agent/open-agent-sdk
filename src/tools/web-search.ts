@@ -1,12 +1,49 @@
 /**
- * WebSearchTool - Web search (via web fetch of search engines)
+ * WebSearchTool - Web search via Exa AI MCP service
  */
 
 import { defineTool } from './types.js'
 
+const EXA_MCP_URL = 'https://mcp.exa.ai/mcp'
+const DEFAULT_TIMEOUT = 25000
+
+interface McpRequest {
+  jsonrpc: '2.0'
+  id: number
+  method: 'tools/call'
+  params: {
+    name: string
+    arguments: Record<string, unknown>
+  }
+}
+
+interface McpResponse {
+  result?: {
+    content?: Array<{ type: string; text: string }>
+  }
+  error?: {
+    message: string
+  }
+}
+
+function parseSse(body: string): McpResponse | null {
+  const lines = body.split('\n')
+  for (const line of lines) {
+    if (line.startsWith('data: ')) {
+      try {
+        return JSON.parse(line.slice(6))
+      } catch {
+        continue
+      }
+    }
+  }
+  return null
+}
+
 export const WebSearchTool = defineTool({
   name: 'WebSearch',
-  description: 'Search the web for information. Returns search results with titles, URLs, and snippets.',
+  description:
+    'Search the web using Exa AI for real-time information. Returns results with titles, URLs, and snippets. Use for current events, recent data, or information beyond knowledge cutoff.',
   inputSchema: {
     type: 'object',
     properties: {
@@ -14,9 +51,20 @@ export const WebSearchTool = defineTool({
         type: 'string',
         description: 'The search query',
       },
-      num_results: {
+      numResults: {
         type: 'number',
-        description: 'Number of results to return (default: 5)',
+        description: 'Number of results to return (default: 8)',
+      },
+      livecrawl: {
+        type: 'string',
+        enum: ['fallback', 'preferred'],
+        description:
+          "Live crawl mode - 'fallback': use if cached unavailable, 'preferred': prioritize live crawling",
+      },
+      type: {
+        type: 'string',
+        enum: ['auto', 'fast', 'deep'],
+        description: "Search type - 'auto': balanced, 'fast': quick, 'deep': comprehensive",
       },
     },
     required: ['query'],
@@ -24,62 +72,54 @@ export const WebSearchTool = defineTool({
   isReadOnly: true,
   isConcurrencySafe: true,
   async call(input, _context) {
-    const { query } = input
+    const { query, numResults = 8, livecrawl = 'fallback', type = 'auto' } = input
+
+    const request: McpRequest = {
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'tools/call',
+      params: {
+        name: 'web_search_exa',
+        arguments: { query, type, numResults, livecrawl },
+      },
+    }
 
     try {
-      // Use DuckDuckGo HTML search as a free fallback
-      const encoded = encodeURIComponent(query)
-      const url = `https://html.duckduckgo.com/html/?q=${encoded}`
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), DEFAULT_TIMEOUT)
 
-      const response = await fetch(url, {
+      const response = await fetch(EXA_MCP_URL, {
+        method: 'POST',
         headers: {
-          'User-Agent': 'Mozilla/5.0 (compatible; AgentSDK/1.0)',
+          'Content-Type': 'application/json',
+          Accept: 'application/json, text/event-stream',
         },
-        signal: AbortSignal.timeout(15000),
+        body: JSON.stringify(request),
+        signal: controller.signal,
       })
+
+      clearTimeout(timeoutId)
 
       if (!response.ok) {
         return { data: `Search failed: HTTP ${response.status}`, is_error: true }
       }
 
-      const html = await response.text()
+      const body = await response.text()
+      const mcpResponse = parseSse(body)
 
-      // Parse search results from DuckDuckGo HTML
-      const results: string[] = []
-      const resultRegex = /<a rel="nofollow" class="result__a" href="([^"]*)"[^>]*>([\s\S]*?)<\/a>/gi
-      const snippetRegex = /<a class="result__snippet"[^>]*>([\s\S]*?)<\/a>/gi
-
-      let match
-      const links: Array<{ title: string; url: string }> = []
-
-      while ((match = resultRegex.exec(html)) !== null) {
-        const href = match[1]
-        const title = match[2].replace(/<[^>]+>/g, '').trim()
-        if (href && title && !href.includes('duckduckgo.com')) {
-          links.push({ title, url: href })
-        }
+      if (mcpResponse?.error) {
+        return { data: `Search error: ${mcpResponse.error.message}`, is_error: true }
       }
 
-      const snippets: string[] = []
-      while ((match = snippetRegex.exec(html)) !== null) {
-        snippets.push(match[1].replace(/<[^>]+>/g, '').trim())
+      if (mcpResponse?.result?.content?.[0]?.text) {
+        return mcpResponse.result.content[0].text
       }
 
-      const numResults = Math.min(input.num_results || 5, links.length)
-      for (let i = 0; i < numResults; i++) {
-        const link = links[i]
-        if (!link) continue
-        let entry = `${i + 1}. ${link.title}\n   ${link.url}`
-        if (snippets[i]) {
-          entry += `\n   ${snippets[i]}`
-        }
-        results.push(entry)
-      }
-
-      return results.length > 0
-        ? results.join('\n\n')
-        : `No results found for "${query}"`
+      return `No results found for "${query}"`
     } catch (err: any) {
+      if (err.name === 'AbortError') {
+        return { data: 'Search timeout after 25 seconds', is_error: true }
+      }
       return { data: `Search error: ${err.message}`, is_error: true }
     }
   },
