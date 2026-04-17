@@ -6,114 +6,187 @@
  */
 
 import type { ToolDefinition, ToolResult } from '../types.js'
+import type { CronTask } from '../cron/types.js'
+import type { CronStorage } from '../cron/storage.js'
+import {
+  parseCronExpression,
+  computeNextCronRun,
+  cronToHuman,
+} from '../cron/cron.js'
 
-/**
- * Cron job definition.
- */
-export interface CronJob {
-  id: string
-  name: string
-  schedule: string // cron expression
-  command: string
-  enabled: boolean
-  createdAt: string
-  lastRunAt?: string
-  nextRunAt?: string
+let storage: CronStorage | null = null
+
+export type CronJob = CronTask
+
+export function initCronTools(storageImpl: CronStorage): void {
+  storage = storageImpl
 }
 
-// In-memory cron store
-const cronStore = new Map<string, CronJob>()
-let cronCounter = 0
+function notInitializedResult(): ToolResult {
+  return {
+    type: 'tool_result',
+    tool_use_id: '',
+    content: 'Cron storage is not initialized.',
+    is_error: true,
+  }
+}
+
+function formatPrompt(prompt: string): string {
+  return prompt.length > 80 ? `${prompt.slice(0, 77)}...` : prompt
+}
 
 /**
  * Get all cron jobs.
  */
-export function getAllCronJobs(): CronJob[] {
-  return Array.from(cronStore.values())
+export async function getAllCronJobs(): Promise<CronTask[]> {
+  if (!storage) return []
+  return storage.load()
 }
 
 /**
  * Clear all cron jobs.
  */
-export function clearCronJobs(): void {
-  cronStore.clear()
-  cronCounter = 0
+export async function clearCronJobs(): Promise<void> {
+  if (!storage) return
+  await storage.save([])
 }
 
 export const CronCreateTool: ToolDefinition = {
   name: 'CronCreate',
-  description: 'Create a scheduled recurring task (cron job). Supports cron expressions for scheduling.',
+  description: 'Create a scheduled cron task. Supports cron expressions for scheduling.',
   inputSchema: {
     type: 'object',
     properties: {
-      name: { type: 'string', description: 'Job name' },
-      schedule: { type: 'string', description: 'Cron expression (e.g., "*/5 * * * *" for every 5 minutes)' },
-      command: { type: 'string', description: 'Command or prompt to execute' },
+      cron: { type: 'string', description: 'Cron expression (for example, "*/5 * * * *" for every 5 minutes)' },
+      prompt: { type: 'string', description: 'Prompt to execute when the task fires' },
+      recurring: { type: 'boolean', description: 'Whether the task should repeat after firing' },
+      durable: { type: 'boolean', description: 'Whether the task should survive expiry cleanup' },
     },
-    required: ['name', 'schedule', 'command'],
+    required: ['cron', 'prompt', 'recurring'],
   },
   isReadOnly: () => false,
   isConcurrencySafe: () => true,
   isEnabled: () => true,
-  async prompt() { return 'Create a scheduled cron job.' },
+  async prompt() { return 'Create a scheduled cron task.' },
   async call(input: any): Promise<ToolResult> {
-    const id = `cron_${++cronCounter}`
-    const job: CronJob = {
-      id,
-      name: input.name,
-      schedule: input.schedule,
-      command: input.command,
-      enabled: true,
-      createdAt: new Date().toISOString(),
+    const cronStorage = storage
+    if (!cronStorage) return notInitializedResult()
+
+    if (typeof input?.cron !== 'string' || typeof input?.prompt !== 'string' || typeof input?.recurring !== 'boolean') {
+      return {
+        type: 'tool_result',
+        tool_use_id: '',
+        content: 'CronCreate requires cron, prompt, and recurring fields.',
+        is_error: true,
+      }
     }
-    cronStore.set(id, job)
+
+    const fields = parseCronExpression(input.cron)
+    if (!fields) {
+      return {
+        type: 'tool_result',
+        tool_use_id: '',
+        content: `Invalid cron expression: ${input.cron}`,
+        is_error: true,
+      }
+    }
+
+    const nextRun = computeNextCronRun(fields, new Date())
+    if (!nextRun) {
+      return {
+        type: 'tool_result',
+        tool_use_id: '',
+        content: `Cron expression has no matching run time within 366 days: ${input.cron}`,
+        is_error: true,
+      }
+    }
+
+    const tasks = await cronStorage.load()
+    if (tasks.length >= 50) {
+      return {
+        type: 'tool_result',
+        tool_use_id: '',
+        content: 'Cron task limit reached: maximum 50 tasks.',
+        is_error: true,
+      }
+    }
+
+    const task: Omit<CronTask, 'id' | 'createdAt'> = {
+      cron: input.cron,
+      prompt: input.prompt,
+      recurring: input.recurring,
+    }
+    if (typeof input.durable === 'boolean') {
+      task.permanent = input.durable
+    }
+
+    const id = await cronStorage.add(task)
+    const description = cronToHuman(input.cron)
 
     return {
       type: 'tool_result',
       tool_use_id: '',
-      content: `Cron job created: ${id} "${job.name}" schedule="${job.schedule}"`,
+      content: `Cron task created: ${id} (${description}). Next run: ${nextRun.toISOString()}`,
     }
   },
 }
 
 export const CronDeleteTool: ToolDefinition = {
   name: 'CronDelete',
-  description: 'Delete a scheduled cron job.',
+  description: 'Delete a scheduled cron task.',
   inputSchema: {
     type: 'object',
     properties: {
-      id: { type: 'string', description: 'Cron job ID to delete' },
+      id: { type: 'string', description: 'Cron task ID to delete' },
     },
     required: ['id'],
   },
   isReadOnly: () => false,
   isConcurrencySafe: () => true,
   isEnabled: () => true,
-  async prompt() { return 'Delete a cron job.' },
+  async prompt() { return 'Delete a cron task.' },
   async call(input: any): Promise<ToolResult> {
-    if (!cronStore.has(input.id)) {
-      return { type: 'tool_result', tool_use_id: '', content: `Cron job not found: ${input.id}`, is_error: true }
+    const cronStorage = storage
+    if (!cronStorage) return notInitializedResult()
+
+    if (typeof input?.id !== 'string') {
+      return {
+        type: 'tool_result',
+        tool_use_id: '',
+        content: 'CronDelete requires an id field.',
+        is_error: true,
+      }
     }
-    cronStore.delete(input.id)
-    return { type: 'tool_result', tool_use_id: '', content: `Cron job deleted: ${input.id}` }
+
+    const tasks = await cronStorage.load()
+    if (!tasks.some((task) => task.id === input.id)) {
+      return { type: 'tool_result', tool_use_id: '', content: `Cron task not found: ${input.id}`, is_error: true }
+    }
+
+    await cronStorage.remove([input.id])
+    return { type: 'tool_result', tool_use_id: '', content: `Cron task deleted: ${input.id}` }
   },
 }
 
 export const CronListTool: ToolDefinition = {
   name: 'CronList',
-  description: 'List all scheduled cron jobs.',
+  description: 'List all scheduled cron tasks.',
   inputSchema: { type: 'object', properties: {} },
   isReadOnly: () => true,
   isConcurrencySafe: () => true,
   isEnabled: () => true,
-  async prompt() { return 'List cron jobs.' },
+  async prompt() { return 'List cron tasks.' },
   async call(): Promise<ToolResult> {
-    const jobs = getAllCronJobs()
-    if (jobs.length === 0) {
-      return { type: 'tool_result', tool_use_id: '', content: 'No cron jobs scheduled.' }
+    const cronStorage = storage
+    if (!cronStorage) return notInitializedResult()
+
+    const tasks = await cronStorage.load()
+    if (tasks.length === 0) {
+      return { type: 'tool_result', tool_use_id: '', content: 'No cron tasks scheduled.' }
     }
-    const lines = jobs.map(j =>
-      `[${j.id}] ${j.enabled ? '✓' : '✗'} "${j.name}" schedule="${j.schedule}" command="${j.command.slice(0, 50)}"`
+
+    const lines = tasks.map((task) =>
+      `[${task.id}] ${cronToHuman(task.cron)} (${task.recurring ? 'recurring' : 'one-shot'}${task.permanent ? ', durable' : ''}) cron="${task.cron}" prompt="${formatPrompt(task.prompt)}"`
     )
     return { type: 'tool_result', tool_use_id: '', content: lines.join('\n') }
   },

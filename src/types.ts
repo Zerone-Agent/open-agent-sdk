@@ -380,6 +380,10 @@ export interface AgentOptions {
   appendSystemPrompt?: string
   /** Available tools (ToolDefinition[] or string[] preset) */
   tools?: ToolDefinition[] | string[] | { type: 'preset'; preset: 'default' }
+  /** Cron storage implementation for scheduled tasks */
+  cronStorage?: import('./cron/storage.js').CronStorage
+  /** Optional jitter configuration override */
+  cronJitterConfig?: Partial<import('./cron/types.js').CronJitterConfig>
   /** Maximum number of agentic turns per query */
   maxTurns?: number
   /** Maximum USD budget per query */

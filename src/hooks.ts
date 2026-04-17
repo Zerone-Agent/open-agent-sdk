@@ -49,6 +49,10 @@ export const HOOK_EVENTS = [
   'PreCompact',
   'PostCompact',
   'TeammateIdle',
+  'CronTaskCreated',
+  'CronTaskFired',
+  'CronTaskExpired',
+  'CronTaskDeleted',
 ] as const
 
 export type HookEvent = typeof HOOK_EVENTS[number]
