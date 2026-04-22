@@ -53,14 +53,33 @@ export async function clearCronJobs(): Promise<void> {
 
 export const CronCreateTool: ToolDefinition = {
   name: 'CronCreate',
-  description: 'Create a scheduled cron task. Supports cron expressions for scheduling.',
+  description:
+    'Create a scheduled task. Supports TWO modes:\n' +
+    '- Recurring tasks: set recurring=true, provide a 5-field cron expression (e.g. "*/5 * * * *").\n' +
+    '- One-shot tasks: set recurring=false and delay_seconds to the number of seconds from now. ' +
+    'No need to calculate absolute times — just pass the relative delay (e.g. 300 = 5 minutes, 3600 = 1 hour). ' +
+    'The tool converts it to an absolute schedule automatically.\n' +
+    'Always prefer this tool over system schedulers like `at`, `crontab`, or `sleep`.',
   inputSchema: {
     type: 'object',
     properties: {
-      cron: { type: 'string', description: 'Cron expression (for example, "*/5 * * * *" for every 5 minutes)' },
+      cron: {
+        type: 'string',
+        description:
+          '5-field cron expression for recurring tasks (e.g. "*/5 * * * *"). Ignored for one-shot tasks when delay_seconds is set.',
+      },
       prompt: { type: 'string', description: 'Prompt to execute when the task fires' },
-      recurring: { type: 'boolean', description: 'Whether the task should repeat after firing' },
-      durable: { type: 'boolean', description: 'Whether the task should survive expiry cleanup' },
+      recurring: {
+        type: 'boolean',
+        description: 'true = repeats on schedule; false = fires once then auto-removed',
+      },
+      delay_seconds: {
+        type: 'number',
+        description:
+          'For one-shot tasks only: how many seconds from now to fire. Examples: 60=1min, 300=5min, 3600=1h, 86400=1day. ' +
+          'The tool converts this to an absolute cron time internally. No need to compute absolute timestamps yourself.',
+      },
+      durable: { type: 'boolean', description: 'Whether the task should survive temporary cleanup' },
     },
     required: ['cron', 'prompt', 'recurring'],
   },
@@ -81,12 +100,18 @@ export const CronCreateTool: ToolDefinition = {
       }
     }
 
-    const fields = parseCronExpression(input.cron)
+    let cronExpr = input.cron
+    if (!input.recurring && typeof input.delay_seconds === 'number' && input.delay_seconds > 0) {
+      const runAt = new Date(Date.now() + input.delay_seconds * 1000)
+      cronExpr = `${runAt.getMinutes()} ${runAt.getHours()} ${runAt.getDate()} ${runAt.getMonth() + 1} *`
+    }
+
+    const fields = parseCronExpression(cronExpr)
     if (!fields) {
       return {
         type: 'tool_result',
         tool_use_id: '',
-        content: `Invalid cron expression: ${input.cron}`,
+        content: `Invalid cron expression: "${cronExpr}". Must be a valid 5-field cron (e.g. "0 16 * * *").`,
         is_error: true,
       }
     }
@@ -96,7 +121,7 @@ export const CronCreateTool: ToolDefinition = {
       return {
         type: 'tool_result',
         tool_use_id: '',
-        content: `Cron expression has no matching run time within 366 days: ${input.cron}`,
+        content: `Cron expression has no matching run time within 366 days: ${cronExpr}`,
         is_error: true,
       }
     }
@@ -112,7 +137,7 @@ export const CronCreateTool: ToolDefinition = {
     }
 
     const task: Omit<CronTask, 'id' | 'createdAt'> = {
-      cron: input.cron,
+      cron: cronExpr,
       prompt: input.prompt,
       recurring: input.recurring,
     }
@@ -122,11 +147,13 @@ export const CronCreateTool: ToolDefinition = {
 
     const id = await cronStorage.add(task)
     const description = cronToHuman(input.cron)
+    const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    const localTimeStr = nextRun.toLocaleString('zh-CN', {timeZone, hour12: false}) 
 
     return {
       type: 'tool_result',
       tool_use_id: '',
-      content: `Cron task created: ${id} (${description}). Next run: ${nextRun.toISOString()}`,
+      content: `Cron task created: ${id} (${description}). Next run: ${localTimeStr} (${timeZone})`,
     }
   },
 }
@@ -192,35 +219,38 @@ export const CronListTool: ToolDefinition = {
   },
 }
 
-export const RemoteTriggerTool: ToolDefinition = {
-  name: 'RemoteTrigger',
-  description: 'Manage remote scheduled agent triggers. Supports list, get, create, update, and run operations.',
-  inputSchema: {
-    type: 'object',
-    properties: {
-      action: {
-        type: 'string',
-        enum: ['list', 'get', 'create', 'update', 'run'],
-        description: 'Operation to perform',
-      },
-      id: { type: 'string', description: 'Trigger ID (for get/update/run)' },
-      name: { type: 'string', description: 'Trigger name (for create)' },
-      schedule: { type: 'string', description: 'Cron schedule (for create/update)' },
-      prompt: { type: 'string', description: 'Agent prompt (for create/update)' },
-    },
-    required: ['action'],
-  },
-  isReadOnly: () => false,
-  isConcurrencySafe: () => true,
-  isEnabled: () => true,
-  async prompt() { return 'Manage remote agent triggers.' },
-  async call(input: any): Promise<ToolResult> {
-    // RemoteTrigger operations are typically handled by the remote backend
-    // In standalone SDK mode, we provide a stub implementation
-    return {
-      type: 'tool_result',
-      tool_use_id: '',
-      content: `RemoteTrigger ${input.action}: This feature requires a connected remote backend. In standalone SDK mode, use CronCreate/CronList/CronDelete for local scheduling.`,
-    }
-  },
-}
+/**
+ * 这个tool是一个占位符，用于在远程环境中管理定时触发器（RemoteTrigger）。在本地SDK模式下，它不会执行实际的调度操作，而是提示用户需要连接远程后端来使用此功能。
+ */
+// export const RemoteTriggerTool: ToolDefinition = {
+//   name: 'RemoteTrigger',
+//   description: 'Manage remote scheduled agent triggers. Supports list, get, create, update, and run operations.',
+//   inputSchema: {
+//     type: 'object',
+//     properties: {
+//       action: {
+//         type: 'string',
+//         enum: ['list', 'get', 'create', 'update', 'run'],
+//         description: 'Operation to perform',
+//       },
+//       id: { type: 'string', description: 'Trigger ID (for get/update/run)' },
+//       name: { type: 'string', description: 'Trigger name (for create)' },
+//       schedule: { type: 'string', description: 'Cron schedule (for create/update)' },
+//       prompt: { type: 'string', description: 'Agent prompt (for create/update)' },
+//     },
+//     required: ['action'],
+//   },
+//   isReadOnly: () => false,
+//   isConcurrencySafe: () => true,
+//   isEnabled: () => true,
+//   async prompt() { return 'Manage remote agent triggers.' },
+//   async call(input: any): Promise<ToolResult> {
+//     // RemoteTrigger operations are typically handled by the remote backend
+//     // In standalone SDK mode, we provide a stub implementation
+//     return {
+//       type: 'tool_result',
+//       tool_use_id: '',
+//       content: `RemoteTrigger ${input.action}: This feature requires a connected remote backend. In standalone SDK mode, use CronCreate/CronList/CronDelete for local scheduling.`,
+//     }
+//   },
+// }

@@ -51,7 +51,7 @@ import { ToolSearchTool } from './tool-search.js'
 import { ListMcpResourcesTool, ReadMcpResourceTool } from './mcp-resource-tools.js'
 
 // Scheduling
-import { CronCreateTool, CronDeleteTool, CronListTool, RemoteTriggerTool } from './cron-tools.js'
+import { CronCreateTool, CronDeleteTool, CronListTool, initCronTools } from './cron-tools.js'
 
 // LSP
 import { LSPTool } from './lsp-tool.js'
@@ -118,7 +118,6 @@ const ALL_TOOLS: ToolDefinition[] = [
   CronCreateTool,
   CronDeleteTool,
   CronListTool,
-  RemoteTriggerTool,
 
   // LSP
   LSPTool,
@@ -225,7 +224,7 @@ export {
   CronCreateTool,
   CronDeleteTool,
   CronListTool,
-  RemoteTriggerTool,
+  initCronTools,
   // LSP
   LSPTool,
   // Config
