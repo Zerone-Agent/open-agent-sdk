@@ -35,6 +35,29 @@ function formatPrompt(prompt: string): string {
   return prompt.length > 80 ? `${prompt.slice(0, 77)}...` : prompt
 }
 
+const AGENT_KEYWORDS: Record<string, string[]> = {
+  bid: ['招标', '投标', '标书', '竞标', '中标', '投标战略'],
+  legal: ['合同', '法律', '法务', '合规审查', '条款', '法律文书'],
+  policy: ['政策', '政策雷达', '政策助手', '补贴申报', '资质认定', '政策更新'],
+  hr: ['招聘', '薪酬', '人事', '劳动合同', '考勤', '人才', '岗位'],
+  finance: ['财务', '报表', '预算', '现金流', '成本优化', 'ROI', '财务军师'],
+  business: ['市场调研', '竞品', '商业', '市场情报', '商业侦探', '客户洞察'],
+}
+
+function inferAgentFromPrompt(prompt: string): string | undefined {
+  const text = prompt.toLowerCase()
+  let bestAgent: string | undefined
+  let bestScore = 0
+  for (const [agent, keywords] of Object.entries(AGENT_KEYWORDS)) {
+    const score = keywords.filter(kw => text.includes(kw)).length
+    if (score > bestScore) {
+      bestScore = score
+      bestAgent = agent
+    }
+  }
+  return bestScore > 0 ? bestAgent : undefined
+}
+
 /**
  * Get all cron jobs.
  */
@@ -159,8 +182,12 @@ export const CronCreateTool: ToolDefinition = {
     if (typeof input.durable === 'boolean') {
       task.permanent = input.durable
     }
-    if (typeof input.agent === 'string') {
-      task.agentId = input.agent
+    let resolvedAgent = typeof input.agent === 'string' ? input.agent : undefined
+    if (!resolvedAgent) {
+      resolvedAgent = inferAgentFromPrompt(input.prompt)
+    }
+    if (resolvedAgent) {
+      task.agentId = resolvedAgent
     }
 
     const id = await cronStorage.add(task)

@@ -3,6 +3,7 @@
  * Supports Windows (PowerShell > Git Bash > cmd) and Unix (bash)
  */
 
+// @ts-expect-error cross-spawn has no type declarations
 import crossSpawn from 'cross-spawn'
 import { defineTool } from './types.js'
 
@@ -96,7 +97,7 @@ export const BashTool = defineTool({
         }, { once: true })
       }
 
-      proc.on('close', (code) => {
+      proc.on('close', (code: number | null) => {
         const stdout = Buffer.concat(chunks).toString('utf-8')
         const stderr = Buffer.concat(errChunks).toString('utf-8')
 
@@ -115,7 +116,7 @@ export const BashTool = defineTool({
         resolve(output || '(no output)')
       })
 
-      proc.on('error', (err) => {
+      proc.on('error', (err: Error) => {
         resolve(`Error executing command: ${err.message}`)
       })
     })
