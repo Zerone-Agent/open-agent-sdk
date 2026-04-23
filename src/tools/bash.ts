@@ -3,7 +3,6 @@
  * Supports Windows (PowerShell > Git Bash > cmd) and Unix (bash)
  */
 
-// @ts-expect-error cross-spawn has no type declarations
 import crossSpawn from 'cross-spawn'
 import { defineTool } from './types.js'
 
