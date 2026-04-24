@@ -214,6 +214,8 @@ export interface ToolContext {
    * Used by tools like AgentTool to propagate subagent events.
    */
   emitEvent?: (event: SDKMessage) => void
+  /** Tool use ID for this tool call */
+  toolUseId?: string
 }
 
 export interface ToolResult {

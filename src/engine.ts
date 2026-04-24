@@ -648,6 +648,7 @@ export class QueryEngine {
       provider: this.provider,
       model: this.config.model,
       apiType: this.provider.apiType,
+      toolUseId: block.id,
       emitEvent: emitSubagentEvent
         ? (event: SDKMessage) => {
             if (event.type === 'subagent') {
