@@ -79,14 +79,6 @@ interface ToolUseBlock {
 async function buildEnvironmentPrompt(config: QueryEngineConfig): Promise<string> {
   const parts: string[] = []
 
-  // Add agent definitions
-  if (config.agents && Object.keys(config.agents).length > 0) {
-    parts.push('\n# Available Subagents\n')
-    for (const [name, def] of Object.entries(config.agents)) {
-      parts.push(`- **${name}**: ${def.description}`)
-    }
-  }
-
   // Environment block (<env> XML with model identity, platform, date, etc.)
   try {
     const sysCtx = await getSystemContext(config.cwd, config.model)
@@ -101,6 +93,22 @@ async function buildEnvironmentPrompt(config: QueryEngineConfig): Promise<string
     parts.push('\nSkills provide specialized instructions and workflows for specific tasks.')
     parts.push('Use the skill tool to load a skill when a task matches its description.\n')
     parts.push(skillsXml)
+  }
+
+  // Add subagent definitions — XML format aligned with skills
+  if (config.agents && Object.keys(config.agents).length > 0) {
+    const agentEntries = Object.entries(config.agents).sort((a, b) => a[0].localeCompare(b[0]))
+    const agentXml = agentEntries.map(([name, def]) => [
+      '  <subagent>',
+      `    <name>${name}</name>`,
+      `    <description>${def.description}</description>`,
+      '  </subagent>',
+    ].join('\n'))
+    parts.push([
+      '<available_subagents>',
+      ...agentXml,
+      '</available_subagents>',
+    ].join('\n'))
   }
 
   // Load AGENTS.md instructions
