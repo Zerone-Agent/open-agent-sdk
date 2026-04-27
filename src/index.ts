@@ -172,6 +172,8 @@ export {
   formatSkillsForPrompt,
   formatSkillsForSystemPrompt,
   formatSkillsForToolDescription,
+  filterSkillsByAllowlist,
+  isProjectSkill,
   loadSkillsFromFilesystem,
 } from './skills/index.js'
 export type {
@@ -397,6 +399,7 @@ export type {
   SDKResultMessage,
   SDKPartialMessage,
   SDKSubagentMessage,
+  SDKSkillsUpdatedMessage,
 
   // Tool types
   ToolDefinition,

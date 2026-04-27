@@ -14,7 +14,12 @@ import { readdir } from 'fs/promises'
 import { join } from 'path'
 import { pathToFileURL } from 'url'
 import type { ToolDefinition, ToolResult, ToolContext } from '../types.js'
-import { getSkill, getUserInvocableSkills, formatSkillsForToolDescription } from '../skills/registry.js'
+import { getSkill, getUserInvocableSkills, formatSkillsForToolDescription, filterSkillsByAllowlist } from '../skills/registry.js'
+
+function getFilteredSkills(context?: ToolContext) {
+  const allSkills = getUserInvocableSkills()
+  return filterSkillsByAllowlist(allSkills, context?.allowedSkills)
+}
 
 // --------------------------------------------------------------------------
 // Helpers
@@ -137,21 +142,26 @@ export const SkillTool: ToolDefinition = {
 
   isReadOnly: () => false,
   isConcurrencySafe: () => false,
-  isEnabled: () => getUserInvocableSkills().length > 0,
+  isEnabled: () => {
+    // NOTE: isEnabled() receives no ToolContext, so allowlist is not applied.
+    // This checks if ANY user-invocable skills exist. The actual allowlist
+    // enforcement happens in call() via filterSkillsByAllowlist.
+    return getUserInvocableSkills().length > 0
+  },
 
   /**
    * Concise Markdown listing injected into the tool description.
    * Kept brief so it doesn't dominate the tool listing.
    * The system prompt carries the verbose XML version.
    */
-  async prompt(): Promise<string> {
-    const skills = getUserInvocableSkills()
+  async prompt(context: ToolContext): Promise<string> {
+    const skills = getFilteredSkills(context)
     if (skills.length === 0) return ''
 
     return [
       'The following skills provide specialized sets of instructions for particular tasks',
       'Invoke this tool to load a skill when a task matches one of the available skills listed below:\n',
-      formatSkillsForToolDescription(),
+      formatSkillsForToolDescription(undefined, skills),
     ].join('\n')
   },
 
@@ -186,6 +196,16 @@ export const SkillTool: ToolDefinition = {
         type: 'tool_result',
         tool_use_id: '',
         content: `Error: Skill "${skillName}" is currently disabled`,
+        is_error: true,
+      }
+    }
+
+    const allowedSkills = _context.allowedSkills
+    if (filterSkillsByAllowlist([skill], allowedSkills).length === 0) {
+      return {
+        type: 'tool_result',
+        tool_use_id: '',
+        content: `Error: Skill "${skillName}" is not in the allowed skills list`,
         is_error: true,
       }
     }

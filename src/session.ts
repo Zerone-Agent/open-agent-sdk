@@ -5,9 +5,8 @@
  * Manages session lifecycle (create, resume, list, fork).
  */
 
-import { readFile, writeFile, mkdir, readdir, stat } from 'fs/promises'
+import { readFile, writeFile, mkdir, readdir } from 'fs/promises'
 import { join } from 'path'
-import type { Message } from './types.js'
 import type { NormalizedMessageParam } from './providers/types.js'
 
 /**

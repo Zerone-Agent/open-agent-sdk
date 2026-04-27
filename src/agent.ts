@@ -37,7 +37,8 @@ import {
   loadSession,
 } from './session.js'
 import { createHookRegistry, type HookRegistry } from './hooks.js'
-import { loadSkillsFromFilesystem } from './skills/index.js'
+import { loadSkillsFromFilesystem, registerSkill as registryRegisterSkill, unregisterSkill as registryUnregisterSkill, clearSkills, getUserInvocableSkills } from './skills/index.js'
+import type { SkillDefinition } from './skills/types.js'
 import { createProvider, type LLMProvider, type ApiType } from './providers/index.js'
 import type { NormalizedMessageParam } from './providers/types.js'
 import { SYSTEM_PROMPTS } from './prompts/system-prompts.js'
@@ -328,6 +329,7 @@ export class Agent {
       hookRegistry: this.hookRegistry,
       sessionId: this.sid,
       settingSources: opts.settingSources,
+      allowedSkills: opts.allowedSkills,
     })
     this.currentEngine = engine
 
@@ -477,6 +479,82 @@ export class Agent {
     if (task) {
       task.status = 'cancelled'
     }
+  }
+
+  /**
+   * Reload all skills from filesystem and bundled definitions.
+   * Returns the updated skills list and any changes.
+   *
+   * NOTE: Not safe against concurrent access — clearSkills() empties the
+   * registry before re-registering. Do not call while the agent is actively
+   * processing, as concurrent reads may see an empty registry.
+   */
+  async reloadSkills(): Promise<{ skills: string[]; added?: string[]; removed?: string[] }> {
+    const before = getUserInvocableSkills().map(s => s.name).sort()
+
+    // Clear existing skills
+    clearSkills()
+
+    // Reload filesystem skills if settingSources is configured
+    if (this.cfg.settingSources && this.cfg.settingSources.length > 0) {
+      try {
+        const cwd = this.cfg.cwd ?? process.cwd()
+        await loadSkillsFromFilesystem(cwd, this.cfg.settingSources)
+      } catch (error) {
+        console.error('Failed to reload filesystem skills:', error)
+      }
+    }
+
+    const after = getUserInvocableSkills().map(s => s.name).sort()
+    const beforeSet = new Set(before)
+    const afterSet = new Set(after)
+    const added = after.filter(s => !beforeSet.has(s))
+    const removed = before.filter(s => !afterSet.has(s))
+
+    const result = {
+      skills: after,
+      ...(added.length > 0 ? { added } : {}),
+      ...(removed.length > 0 ? { removed } : {}),
+    }
+
+    if (this.cfg.onSkillsUpdated) {
+      this.cfg.onSkillsUpdated({
+        type: 'system',
+        subtype: 'skills_updated',
+        ...result,
+      })
+    }
+
+    return result
+  }
+
+  /**
+   * Register a single skill programmatically.
+   */
+  registerSkill(definition: SkillDefinition): void {
+    registryRegisterSkill(definition)
+  }
+
+  /**
+   * Unregister a single skill by name.
+   * Returns true if the skill was found and removed.
+   */
+  unregisterSkill(name: string): boolean {
+    return registryUnregisterSkill(name)
+  }
+
+  /**
+   * Get the list of allowed skills (whitelist).
+   */
+  getAllowedSkills(): string[] | undefined {
+    return this.cfg.allowedSkills
+  }
+
+  /**
+   * Set the allowed skills whitelist.
+   */
+  setAllowedSkills(allowedSkills: string[] | undefined): void {
+    this.cfg.allowedSkills = allowedSkills
   }
 
   /**
