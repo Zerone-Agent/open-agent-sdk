@@ -61,6 +61,7 @@ interface OpenAIChatMessage {
   role: 'system' | 'user' | 'assistant' | 'tool'
   content?: string | null
   reasoning_content?: string | null
+  reasoning?: string | null
   tool_calls?: OpenAIToolCall[]
   tool_call_id?: string
 }
@@ -91,6 +92,7 @@ interface OpenAIChatResponse {
       role: 'assistant'
       content: string | null
       reasoning_content?: string | null
+      reasoning?: string | null
       tool_calls?: OpenAIToolCall[]
     }
     finish_reason: 'stop' | 'length' | 'tool_calls' | 'content_filter' | string
@@ -129,6 +131,10 @@ export class OpenAIProvider implements LLMProvider {
 
     if (tools && tools.length > 0) {
       body.tools = tools
+    }
+
+    if (params.thinking?.type === 'enabled') {
+      body.chat_template_kwargs = { enable_thinking: true }
     }
 
     // Make API call
@@ -172,6 +178,10 @@ export class OpenAIProvider implements LLMProvider {
       body.tools = tools
     }
 
+    if (params.thinking?.type === 'enabled') {
+      body.chat_template_kwargs = { enable_thinking: true }
+    }
+
     const response = await fetch(`${this.baseURL}/chat/completions`, {
       method: 'POST',
       headers: {
@@ -212,12 +222,13 @@ export class OpenAIProvider implements LLMProvider {
       const delta = choice.delta
       if (!delta) continue
 
-      // Reasoning/thinking content (DeepSeek-R1, Qwen-QWQ, etc.)
-      if (delta.reasoning_content) {
+      // Reasoning/thinking content (DeepSeek-R1, Qwen-QWQ, vLLM Gemma, etc.)
+      const reasoningContent = delta.reasoning_content || delta.reasoning
+      if (reasoningContent) {
         yield {
           type: 'thinking',
           index: currentBlockIndex,
-          delta: delta.reasoning_content,
+          delta: reasoningContent,
         }
       }
 
@@ -414,8 +425,9 @@ export class OpenAIProvider implements LLMProvider {
     const content: NormalizedResponseBlock[] = []
 
     // Add thinking content (before text, matches streaming order)
-    if (choice.message.reasoning_content) {
-      content.push({ type: 'thinking', thinking: choice.message.reasoning_content })
+    const reasoningContent = choice.message.reasoning_content || choice.message.reasoning
+    if (reasoningContent) {
+      content.push({ type: 'thinking', thinking: reasoningContent })
     }
 
     // Add text content

@@ -362,8 +362,7 @@ export class QueryEngine {
             messages: apiMessages,
             tools: tools.length > 0 ? tools : undefined,
             thinking:
-              this.config.thinking?.type === 'enabled' &&
-                this.config.thinking.budgetTokens
+              this.config.thinking?.type === 'enabled'
                 ? {
                   type: 'enabled',
                   budget_tokens: this.config.thinking.budgetTokens,
@@ -406,8 +405,7 @@ export class QueryEngine {
                 messages: apiMessages,
                 tools: tools.length > 0 ? tools : undefined,
                 thinking:
-                  this.config.thinking?.type === 'enabled' &&
-                    this.config.thinking.budgetTokens
+                  this.config.thinking?.type === 'enabled'
                     ? {
                       type: 'enabled',
                       budget_tokens: this.config.thinking.budgetTokens,
