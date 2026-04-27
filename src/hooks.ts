@@ -23,7 +23,7 @@
  * - Notification: system notification
  */
 
-import { spawn, type ChildProcess } from 'child_process'
+import { spawn } from 'child_process'
 
 /**
  * All supported hook events.

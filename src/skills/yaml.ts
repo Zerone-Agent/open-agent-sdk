@@ -4,7 +4,7 @@
  * Lightweight parser without external dependencies.
  */
 
-export interface Frontmatter {
+interface Frontmatter {
   name?: string
   description: string
   model?: string

@@ -12,7 +12,6 @@ import type {
   CreateMessageParams,
   CreateMessageResponse,
   NormalizedMessageParam,
-  NormalizedContentBlock,
   NormalizedTool,
   NormalizedResponseBlock,
   StreamChunk,

@@ -5,6 +5,7 @@
  */
 
 import { readdir, readFile } from 'fs/promises'
+import { existsSync, statSync } from 'fs'
 import { join } from 'path'
 import { homedir } from 'os'
 import { parseSkillMarkdown } from './yaml.js'
@@ -12,7 +13,7 @@ import { registerSkill } from './registry.js'
 import type { SkillDefinition, SkillContentBlock } from './types.js'
 import type { SettingSource } from '../types.js'
 
-export interface LoadResult {
+interface LoadResult {
   loaded: number
   errors: Error[]
 }
@@ -54,6 +55,18 @@ export async function loadSkillsFromFilesystem(
   return { loaded, errors }
 }
 
+function isDirOrSymlinkToDir(p: string, entry: import('fs').Dirent): boolean {
+  if (entry.isDirectory()) return true
+  if (entry.isSymbolicLink()) {
+    try {
+      return existsSync(p) && statSync(p).isDirectory()
+    } catch {
+      return false
+    }
+  }
+  return false
+}
+
 /**
  * Load all skills from a directory.
  */
@@ -65,7 +78,7 @@ async function loadSkillsFromDir(
 
   try {
     const entries = await readdir(dir, { withFileTypes: true })
-    const skillDirs = entries.filter(entry => entry.isDirectory() || entry.isSymbolicLink())
+    const skillDirs = entries.filter(entry => isDirOrSymlinkToDir(join(dir, entry.name), entry))
 
     for (const skillDir of skillDirs) {
       const skillPath = join(dir, skillDir.name, 'SKILL.md')

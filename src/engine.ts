@@ -44,7 +44,7 @@ import {
 import { getSystemContext } from './utils/context.js'
 import { normalizeMessagesForAPI } from './utils/messages.js'
 import type { HookRegistry, HookInput, HookOutput } from './hooks.js'
-import { formatSkillsForSystemPrompt, getUserInvocableSkills } from './skills/registry.js'
+import { formatSkillsForSystemPrompt, getUserInvocableSkills, filterSkillsByAllowlist } from './skills/registry.js'
 import { SYSTEM_PROMPTS } from './prompts/system-prompts.js'
 import { loadAgentsMd } from './utils/agents-md.js'
 
@@ -96,7 +96,9 @@ async function buildEnvironmentPrompt(config: QueryEngineConfig): Promise<string
   }
 
   // Add skills — verbose XML format builds a complete cognitive map for the model
-  const skillsXml = formatSkillsForSystemPrompt()
+  const allSkills = getUserInvocableSkills()
+  const filteredSkills = filterSkillsByAllowlist(allSkills, config.allowedSkills)
+  const skillsXml = formatSkillsForSystemPrompt(filteredSkills)
   if (skillsXml) {
     parts.push('\nSkills provide specialized instructions and workflows for specific tasks.')
     parts.push('Use the skill tool to load a skill when a task matches its description.\n')
@@ -283,13 +285,14 @@ export class QueryEngine {
     const systemPrompt = await buildSystemPrompt(this.config)
 
     // Emit init system message
-    const skills = getUserInvocableSkills()
+    const allSkills = getUserInvocableSkills()
+    const filteredSkills = filterSkillsByAllowlist(allSkills, this.config.allowedSkills)
     yield {
       type: 'system',
       subtype: 'init',
       session_id: this.sessionId,
       tools: this.config.tools.map(t => t.name),
-      skills: skills.map(s => s.name),
+      skills: filteredSkills.map(s => s.name),
       model: this.config.model,
       cwd: this.config.cwd,
       mcp_servers: [],
@@ -650,6 +653,8 @@ export class QueryEngine {
       provider: this.provider,
       model: this.config.model,
       apiType: this.provider.apiType,
+      allowedSkills: this.config.allowedSkills,
+      settingSources: this.config.settingSources,
       emitEvent: emitSubagentEvent
         ? (event: SDKMessage) => {
             if (event.type === 'subagent') {

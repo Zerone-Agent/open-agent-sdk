@@ -59,6 +59,40 @@ export function getUserInvocableSkills(): SkillDefinition[] {
 }
 
 /**
+ * Check if a skill is a project skill (loaded from project directory).
+ */
+export function isProjectSkill(skill: SkillDefinition): boolean {
+  if (!skill.location) return false
+  // Project skills are loaded from cwd/.openagent/skills/
+  // They won't be under the home directory
+  const home = process.env.HOME || process.env.USERPROFILE || ''
+  if (home && skill.location.startsWith(home)) return false
+  return true
+}
+
+/**
+ * Filter skills by allowlist.
+ * - allowedSkills 未定义或为空数组：只允许项目技能，其他技能不加载
+ * - allowedSkills 已定义且非空：只允许列表中的技能 + 项目技能
+ */
+export function filterSkillsByAllowlist(
+  skills: SkillDefinition[],
+  allowedSkills?: string[],
+): SkillDefinition[] {
+  // 未定义或为空数组：只保留项目技能
+  if (!allowedSkills || allowedSkills.length === 0) {
+    return skills.filter((skill) => isProjectSkill(skill))
+  }
+
+  return skills.filter((skill) => {
+    // Project skills are always allowed
+    if (isProjectSkill(skill)) return true
+    // Check allowlist
+    return allowedSkills.includes(skill.name)
+  })
+}
+
+/**
  * Check if a skill exists.
  */
 export function hasSkill(name: string): boolean {
@@ -102,8 +136,8 @@ export function clearSkills(): void {
  * if we present a more verbose version of them here and a less
  * verbose version in tool description"
  */
-export function formatSkillsForSystemPrompt(): string {
-  const invocable = getUserInvocableSkills()
+export function formatSkillsForSystemPrompt(skills?: SkillDefinition[]): string {
+  const invocable = skills ?? getUserInvocableSkills()
   if (invocable.length === 0) return ''
 
   const sorted = [...invocable].sort((a, b) => a.name.localeCompare(b.name))
@@ -138,8 +172,9 @@ export function formatSkillsForSystemPrompt(): string {
  */
 export function formatSkillsForToolDescription(
   contextWindowTokens?: number,
+  skills?: SkillDefinition[],
 ): string {
-  const invocable = getUserInvocableSkills()
+  const invocable = skills ?? getUserInvocableSkills()
   if (invocable.length === 0) return ''
 
   // Budget: 1% of context window in characters (4 chars per token)

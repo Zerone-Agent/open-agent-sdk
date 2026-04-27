@@ -21,6 +21,8 @@ export {
   formatSkillsForPrompt,
   formatSkillsForSystemPrompt,
   formatSkillsForToolDescription,
+  filterSkillsByAllowlist,
+  isProjectSkill,
 } from './registry.js'
 
 // Filesystem loading

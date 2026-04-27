@@ -61,6 +61,7 @@ export type SDKMessage =
   | SDKTaskNotificationMessage
   | SDKRateLimitEvent
   | SDKSubagentMessage
+  | SDKSkillsUpdatedMessage
 
 export interface SDKAssistantMessage {
   type: 'assistant'
@@ -124,6 +125,15 @@ export interface SDKSystemMessage {
   mcp_servers: Array<{ name: string; status: string }>
   permission_mode: string
   system_prompt?: string
+}
+
+/** Emitted when the available skills list changes. */
+export interface SDKSkillsUpdatedMessage {
+  type: 'system'
+  subtype: 'skills_updated'
+  skills: string[]
+  added?: string[]
+  removed?: string[]
 }
 
 /** Marks a compaction boundary in the conversation. */
@@ -214,6 +224,10 @@ export interface ToolContext {
    * Used by tools like AgentTool to propagate subagent events.
    */
   emitEvent?: (event: SDKMessage) => void
+  /** Allowed skills whitelist (inherited from agent config) */
+  allowedSkills?: string[]
+  /** Setting sources for filesystem skill loading */
+  settingSources?: SettingSource[]
 }
 
 export interface ToolResult {
@@ -412,6 +426,8 @@ export interface AgentOptions {
   allowedTools?: string[]
   /** Tool names to deny */
   disallowedTools?: string[]
+  /** Skill names to allow (whitelist). If undefined or empty, only project skills are allowed. */
+  allowedSkills?: string[]
   /** MCP server configurations */
   mcpServers?: Record<string, McpServerConfig | any> // supports McpSdkServerConfig
   /** Custom subagent definitions */
@@ -458,6 +474,8 @@ export interface AgentOptions {
   extraArgs?: Record<string, string | null>
   /** SDK betas to enable */
   betas?: string[]
+  /** Callback emitted when the available skills list changes (e.g. after reloadSkills) */
+  onSkillsUpdated?: (event: import('./types.js').SDKSkillsUpdatedMessage) => void
   /** Permission prompt tool name override */
   permissionPromptToolName?: string
   /** Hook configurations */
@@ -508,4 +526,6 @@ export interface QueryEngineConfig {
   sessionId?: string
   /** Load settings from filesystem */
   settingSources?: SettingSource[]
+  /** Skill names to allow (whitelist). If undefined or empty, only project skills are allowed. */
+  allowedSkills?: string[]
 }

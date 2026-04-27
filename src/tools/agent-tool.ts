@@ -6,7 +6,7 @@
  * Subagent events are propagated to the parent stream via context.emitEvent.
  */
 
-import type { ToolDefinition, ToolContext, ToolResult, AgentDefinition, SDKMessage } from '../types.js'
+import type { ToolDefinition, ToolContext, ToolResult, AgentDefinition } from '../types.js'
 import { QueryEngine } from '../engine.js'
 import { getAllBaseTools, filterTools } from './index.js'
 import { createProvider, type ApiType } from '../providers/index.js'
@@ -120,6 +120,8 @@ export const AgentTool: ToolDefinition = {
       canUseTool: async () => ({ behavior: 'allow' }),
       includePartialMessages: true,
       sessionId: subSessionId,
+      allowedSkills: agentDef?.skills,
+      settingSources: context.settingSources,
     })
 
     const emitEvent = context.emitEvent
