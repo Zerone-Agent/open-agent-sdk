@@ -3,7 +3,7 @@
  * Supports macOS (zsh > bash), Linux (bash), Windows (PowerShell > Git Bash > cmd)
  */
 
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
 import crossSpawn from 'cross-spawn'
@@ -22,6 +22,7 @@ interface ShellConfig {
   shell: string
   args: string[]
   name: string
+  envPath?: string
 }
 
 function getShellConfig(): ShellConfig {
@@ -37,6 +38,19 @@ function getShellConfig(): ShellConfig {
 
   if (process.platform !== 'win32') {
     return { shell: 'bash', args: ['-c'], name: 'bash' }
+  }
+
+  // Windows: Priority - OPENAGENT_BASH_PATH > PowerShell > Git Bash > cmd
+  const openAgentBash = process.env.OPENAGENT_BASH_PATH
+  if (openAgentBash && existsSync(openAgentBash)) {
+    const gitBashRoot = path.dirname(path.dirname(openAgentBash))
+    const usrBin = path.join(gitBashRoot, 'usr', 'bin')
+    return {
+      shell: openAgentBash,
+      args: ['-c'],
+      name: 'bash',
+      envPath: existsSync(usrBin) ? usrBin : undefined,
+    }
   }
 
   const psPaths = ['pwsh.exe', 'powershell.exe']
@@ -120,13 +134,18 @@ export const BashTool = defineTool({
     const timeoutMs = Math.min(userTimeout || 120000, 600000)
     const cwd = input.workdir || context.cwd
 
+    const env = { ...process.env }
+    if (shellConfig.envPath) {
+      env.PATH = `${shellConfig.envPath}${path.delimiter}${env.PATH || ''}`
+    }
+
     return new Promise<string>((resolve) => {
       const chunks: Buffer[] = []
       const errChunks: Buffer[] = []
 
       const proc = crossSpawn(shellConfig.shell, [...shellConfig.args, command], {
         cwd,
-        env: { ...process.env },
+        env,
         timeout: timeoutMs,
         stdio: ['pipe', 'pipe', 'pipe'],
         windowsHide: true,
