@@ -46,7 +46,7 @@ IMPORTANT: This tool does NOT support asking multiple questions at once. Each ca
   inputSchema: {
     type: 'object',
     properties: {
-      question: { type: 'string', description: 'The question to ask the user. For interactive Q&A, this is the single current question (not all questions at once).' },
+      question: { type: 'string', description: 'The question to ask the user.' },
       options: {
         type: 'array',
         items: { type: 'string' },
