@@ -9,13 +9,13 @@
 import type { ToolDefinition, ToolResult } from '../types.js'
 
 // Callback for handling user questions (set by the agent)
-let questionHandler: ((question: string, options?: string[]) => Promise<string>) | null = null
+let questionHandler: ((question: string, options: string[], allowMultiselect?: boolean) => Promise<string>) | null = null
 
 /**
  * Set the question handler for AskUserQuestion.
  */
 export function setQuestionHandler(
-  handler: (question: string, options?: string[]) => Promise<string>,
+  handler: (question: string, options: string[], allowMultiselect?: boolean) => Promise<string>,
 ): void {
   questionHandler = handler
 }
@@ -29,7 +29,7 @@ export function clearQuestionHandler(): void {
 
 export const AskUserQuestionTool: ToolDefinition = {
   name: 'AskUserQuestion',
-  description: `Ask the user a question and wait for their response. Displays a structured popup with optional choices.
+  description: `Ask the user a question with required choices. When your question has clear options for the user to select, prefer this tool over asking directly in plain text.
 
 Suitable scenarios:
 - User needs to choose from multiple options (e.g., plan selection, file selection)
@@ -37,35 +37,46 @@ Suitable scenarios:
 - User instruction is ambiguous and needs clarification
 - Interactive Q&A: personality tests, surveys, story interactions where you need per-question feedback
 
-Interactive Q&A mode:
+Requirements:
+- MUST provide at least 2 options for the user to choose from
 - Call AskUserQuestion once per question — show only the current question
 - After the user answers, determine the next question based on their response
 - Progress step by step until all questions are completed
-- Do NOT list all questions in plain text — use multiple AskUserQuestion calls to unfold them one by one`,
+IMPORTANT: This tool does NOT support asking multiple questions at once. Each call asks ONE question only. If you have multiple questions, call this tool multiple times, one question per call.`,
   inputSchema: {
     type: 'object',
     properties: {
-      question: { type: 'string', description: 'The question to ask the user. For interactive Q&A, this is the single current question (not all questions at once).' },
+      question: { type: 'string', description: 'The question to ask the user. Ask only one question at a time.' },
       options: {
         type: 'array',
         items: { type: 'string' },
-        description: 'Optional choices for the user to select from. Recommended for most scenarios to speed up user response.',
+        minItems: 2,
+        description: 'Required choices for the user to select from. Must provide at least 2 options.',
       },
       allow_multiselect: {
         type: 'boolean',
         description: 'Whether to allow multiple selections (for options)',
       },
     },
-    required: ['question'],
+    required: ['question', 'options'],
   },
   isReadOnly: () => true,
   isConcurrencySafe: () => false,
   isEnabled: () => true,
-  async prompt() { return 'Ask the user a question with optional choices. One question at a time for interactive Q&A.' },
+  async prompt() { return 'Ask the user a question with required choices. One question at a time for interactive Q&A.' },
   async call(input: any): Promise<ToolResult> {
+    if (!input.options || !Array.isArray(input.options) || input.options.length < 2) {
+      return {
+        type: 'tool_result',
+        tool_use_id: '',
+        content: 'Error: options must be an array with at least 2 items.',
+        is_error: true,
+      }
+    }
+
     if (questionHandler) {
       try {
-        const answer = await questionHandler(input.question, input.options)
+        const answer = await questionHandler(input.question, input.options, input.allow_multiselect)
         return {
           type: 'tool_result',
           tool_use_id: '',
@@ -85,7 +96,7 @@ Interactive Q&A mode:
     return {
       type: 'tool_result',
       tool_use_id: '',
-      content: `[Non-interactive mode] Question: ${input.question}${input.options ? `\nOptions: ${input.options.join(', ')}` : ''}\n\nNo user available to answer. Proceeding with best judgment.`,
+      content: `[Non-interactive mode] Question: ${input.question}\nOptions: ${input.options.join(', ')}\n\nNo user available to answer. Proceeding with best judgment.`,
     }
   },
 }
