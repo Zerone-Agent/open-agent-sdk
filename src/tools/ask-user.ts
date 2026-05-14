@@ -29,7 +29,7 @@ export function clearQuestionHandler(): void {
 
 export const AskUserQuestionTool: ToolDefinition = {
   name: 'AskUserQuestion',
-  description: `Ask the user a question with required choices. Displays a structured popup with choices for the user to select from.
+  description: `Ask the user a question with required choices.
 
 Suitable scenarios:
 - User needs to choose from multiple options (e.g., plan selection, file selection)
