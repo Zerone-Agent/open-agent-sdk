@@ -65,6 +65,15 @@ IMPORTANT: This tool does NOT support asking multiple questions at once. Each ca
   isEnabled: () => true,
   async prompt() { return 'Ask the user a question with required choices. One question at a time for interactive Q&A.' },
   async call(input: any): Promise<ToolResult> {
+    if (!input.options || !Array.isArray(input.options) || input.options.length < 2) {
+      return {
+        type: 'tool_result',
+        tool_use_id: '',
+        content: 'Error: options must be an array with at least 2 items.',
+        is_error: true,
+      }
+    }
+
     if (questionHandler) {
       try {
         const answer = await questionHandler(input.question, input.options, input.allow_multiselect)
