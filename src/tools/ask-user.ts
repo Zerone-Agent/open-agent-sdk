@@ -9,13 +9,13 @@
 import type { ToolDefinition, ToolResult } from '../types.js'
 
 // Callback for handling user questions (set by the agent)
-let questionHandler: ((question: string, options?: string[]) => Promise<string>) | null = null
+let questionHandler: ((question: string, options: string[]) => Promise<string>) | null = null
 
 /**
  * Set the question handler for AskUserQuestion.
  */
 export function setQuestionHandler(
-  handler: (question: string, options?: string[]) => Promise<string>,
+  handler: (question: string, options: string[]) => Promise<string>,
 ): void {
   questionHandler = handler
 }
@@ -29,7 +29,7 @@ export function clearQuestionHandler(): void {
 
 export const AskUserQuestionTool: ToolDefinition = {
   name: 'AskUserQuestion',
-  description: `Ask the user a question and wait for their response. Displays a structured popup with optional choices.
+  description: `Ask the user a question with required choices. Displays a structured popup with choices for the user to select from.
 
 Suitable scenarios:
 - User needs to choose from multiple options (e.g., plan selection, file selection)
@@ -37,7 +37,8 @@ Suitable scenarios:
 - User instruction is ambiguous and needs clarification
 - Interactive Q&A: personality tests, surveys, story interactions where you need per-question feedback
 
-Interactive Q&A mode:
+Requirements:
+- MUST provide at least 2 options for the user to choose from
 - Call AskUserQuestion once per question — show only the current question
 - After the user answers, determine the next question based on their response
 - Progress step by step until all questions are completed
@@ -49,19 +50,20 @@ Interactive Q&A mode:
       options: {
         type: 'array',
         items: { type: 'string' },
-        description: 'Optional choices for the user to select from. Recommended for most scenarios to speed up user response.',
+        minItems: 2,
+        description: 'Required choices for the user to select from. Must provide at least 2 options.',
       },
       allow_multiselect: {
         type: 'boolean',
         description: 'Whether to allow multiple selections (for options)',
       },
     },
-    required: ['question'],
+    required: ['question', 'options'],
   },
   isReadOnly: () => true,
   isConcurrencySafe: () => false,
   isEnabled: () => true,
-  async prompt() { return 'Ask the user a question with optional choices. One question at a time for interactive Q&A.' },
+  async prompt() { return 'Ask the user a question with required choices. One question at a time for interactive Q&A.' },
   async call(input: any): Promise<ToolResult> {
     if (questionHandler) {
       try {
@@ -85,7 +87,7 @@ Interactive Q&A mode:
     return {
       type: 'tool_result',
       tool_use_id: '',
-      content: `[Non-interactive mode] Question: ${input.question}${input.options ? `\nOptions: ${input.options.join(', ')}` : ''}\n\nNo user available to answer. Proceeding with best judgment.`,
+      content: `[Non-interactive mode] Question: ${input.question}\nOptions: ${input.options.join(', ')}\n\nNo user available to answer. Proceeding with best judgment.`,
     }
   },
 }
