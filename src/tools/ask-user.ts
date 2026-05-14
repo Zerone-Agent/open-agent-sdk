@@ -29,7 +29,7 @@ export function clearQuestionHandler(): void {
 
 export const AskUserQuestionTool: ToolDefinition = {
   name: 'AskUserQuestion',
-  description: `Ask the user a question with required choices.
+  description: `Ask the user a question with required choices. When your question has clear options for the user to select, prefer this tool over asking directly in plain text.
 
 Suitable scenarios:
 - User needs to choose from multiple options (e.g., plan selection, file selection)
