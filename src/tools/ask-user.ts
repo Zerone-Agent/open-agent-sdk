@@ -9,13 +9,13 @@
 import type { ToolDefinition, ToolResult } from '../types.js'
 
 // Callback for handling user questions (set by the agent)
-let questionHandler: ((question: string, options: string[]) => Promise<string>) | null = null
+let questionHandler: ((question: string, options: string[], allowMultiselect?: boolean) => Promise<string>) | null = null
 
 /**
  * Set the question handler for AskUserQuestion.
  */
 export function setQuestionHandler(
-  handler: (question: string, options: string[]) => Promise<string>,
+  handler: (question: string, options: string[], allowMultiselect?: boolean) => Promise<string>,
 ): void {
   questionHandler = handler
 }
@@ -67,7 +67,7 @@ IMPORTANT: This tool does NOT support asking multiple questions at once. Each ca
   async call(input: any): Promise<ToolResult> {
     if (questionHandler) {
       try {
-        const answer = await questionHandler(input.question, input.options)
+        const answer = await questionHandler(input.question, input.options, input.allow_multiselect)
         return {
           type: 'tool_result',
           tool_use_id: '',
