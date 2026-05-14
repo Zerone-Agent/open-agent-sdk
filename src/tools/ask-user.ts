@@ -42,7 +42,7 @@ Requirements:
 - Call AskUserQuestion once per question — show only the current question
 - After the user answers, determine the next question based on their response
 - Progress step by step until all questions are completed
-- Do NOT list all questions in plain text — use multiple AskUserQuestion calls to unfold them one by one`,
+IMPORTANT: This tool does NOT support asking multiple questions at once. Each call asks ONE question only. If you have multiple questions, call this tool multiple times, one question per call.`,
   inputSchema: {
     type: 'object',
     properties: {
