@@ -127,11 +127,16 @@ export const BashTool = defineTool({
     const timeoutMs = Math.min(userTimeout || 120000, 600000)
     const cwd = input.workdir || context.cwd
 
+    // PowerShell UTF-8 encoding fix
+    const finalCommand = shellConfig.name === 'powershell'
+      ? `[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; ${command}`
+      : command
+
     return new Promise<string>((resolve) => {
       const chunks: Buffer[] = []
       const errChunks: Buffer[] = []
 
-      const proc = crossSpawn(shellConfig.shell, [...shellConfig.args, command], {
+      const proc = crossSpawn(shellConfig.shell, [...shellConfig.args, finalCommand], {
         cwd,
         env: { ...process.env },
         timeout: timeoutMs,
