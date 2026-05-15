@@ -3,7 +3,7 @@
  * Supports macOS (zsh > bash), Linux (bash), Windows (PowerShell > Git Bash > cmd)
  */
 
-import { existsSync, readFileSync } from 'node:fs'
+import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
 import crossSpawn from 'cross-spawn'
@@ -22,7 +22,6 @@ interface ShellConfig {
   shell: string
   args: string[]
   name: string
-  envPath?: string
 }
 
 function getShellConfig(): ShellConfig {
@@ -40,29 +39,7 @@ function getShellConfig(): ShellConfig {
     return { shell: 'bash', args: ['-c'], name: 'bash' }
   }
 
-  // Windows: Priority - OPENAGENT_BASH_PATH > PowerShell > Git Bash > cmd
-  const openAgentBash = process.env.OPENAGENT_BASH_PATH
-  if (openAgentBash && existsSync(openAgentBash)) {
-    const gitBashRoot = path.dirname(path.dirname(openAgentBash))
-    const usrBin = path.join(gitBashRoot, 'usr', 'bin')
-    return {
-      shell: openAgentBash,
-      args: ['-c'],
-      name: 'bash',
-      envPath: existsSync(usrBin) ? usrBin : undefined,
-    }
-  }
-
-  const psPaths = ['pwsh.exe', 'powershell.exe']
-  for (const ps of psPaths) {
-    try {
-      const result = crossSpawn.sync(ps, ['-Command', 'exit 0'], { stdio: 'ignore' })
-      if (result.status === 0) {
-        return { shell: ps, args: ['-NoLogo', '-NoProfile', '-NonInteractive', '-Command'], name: ps === 'pwsh.exe' ? 'pwsh' : 'powershell' }
-      }
-    } catch {}
-  }
-
+  // Windows: Priority - Git Bash > PowerShell > cmd
   try {
     const gitResult = crossSpawn.sync('git', ['--exec-path'], { encoding: 'utf-8' })
     if (gitResult.status === 0 && gitResult.stdout) {
@@ -78,6 +55,16 @@ function getShellConfig(): ShellConfig {
       }
     }
   } catch {}
+
+  const psPaths = ['pwsh.exe', 'powershell.exe']
+  for (const ps of psPaths) {
+    try {
+      const result = crossSpawn.sync(ps, ['-Command', 'exit 0'], { stdio: 'ignore' })
+      if (result.status === 0) {
+        return { shell: ps, args: ['-NoLogo', '-NoProfile', '-NonInteractive', '-Command'], name: ps === 'pwsh.exe' ? 'pwsh' : 'powershell' }
+      }
+    } catch {}
+  }
 
   return { shell: 'cmd.exe', args: ['/c'], name: 'cmd' }
 }
@@ -134,18 +121,13 @@ export const BashTool = defineTool({
     const timeoutMs = Math.min(userTimeout || 120000, 600000)
     const cwd = input.workdir || context.cwd
 
-    const env = { ...process.env }
-    if (shellConfig.envPath) {
-      env.PATH = `${shellConfig.envPath}${path.delimiter}${env.PATH || ''}`
-    }
-
     return new Promise<string>((resolve) => {
       const chunks: Buffer[] = []
       const errChunks: Buffer[] = []
 
       const proc = crossSpawn(shellConfig.shell, [...shellConfig.args, command], {
         cwd,
-        env,
+        env: { ...process.env },
         timeout: timeoutMs,
         stdio: ['pipe', 'pipe', 'pipe'],
         windowsHide: true,
