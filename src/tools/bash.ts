@@ -44,12 +44,18 @@ function getShellConfig(): ShellConfig {
     const gitResult = crossSpawn.sync('git', ['--exec-path'], { encoding: 'utf-8' })
     if (gitResult.status === 0 && gitResult.stdout) {
       const gitPath = gitResult.stdout.trim()
-      const gitBashPath = gitPath.replace(/\/libexec\/git-core$/, '/bin/bash.exe').replace(/\\libexec\\git-core$/, '\\bin\\bash.exe')
-      if (gitBashPath !== gitPath) {
+      const possiblePaths = [
+        gitPath.replace(/\/mingw64\/libexec\/git-core$/, '/bin/bash.exe').replace(/\\mingw64\\libexec\\git-core$/, '\\bin\\bash.exe'),
+        gitPath.replace(/\/libexec\/git-core$/, '/bin/bash.exe').replace(/\\libexec\\git-core$/, '\\bin\\bash.exe'),
+        gitPath.replace(/\/mingw64\/libexec\/git-core$/, '/usr/bin/bash.exe').replace(/\\mingw64\\libexec\\git-core$/, '\\usr\\bin\\bash.exe'),
+      ]
+      
+      for (const bashPath of possiblePaths) {
+        if (bashPath === gitPath) continue
         try {
-          const bashResult = crossSpawn.sync(gitBashPath, ['-c', 'exit 0'], { stdio: 'ignore' })
+          const bashResult = crossSpawn.sync(bashPath, ['-c', 'exit 0'], { stdio: 'ignore' })
           if (bashResult.status === 0) {
-            return { shell: gitBashPath, args: ['-c'], name: 'bash' }
+            return { shell: bashPath, args: ['-c'], name: 'bash' }
           }
         } catch {}
       }
