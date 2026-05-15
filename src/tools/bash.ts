@@ -39,6 +39,29 @@ function getShellConfig(): ShellConfig {
     return { shell: 'bash', args: ['-c'], name: 'bash' }
   }
 
+  // Windows: Priority - Git Bash > PowerShell > cmd
+  try {
+    const gitResult = crossSpawn.sync('git', ['--exec-path'], { encoding: 'utf-8' })
+    if (gitResult.status === 0 && gitResult.stdout) {
+      const gitPath = gitResult.stdout.trim()
+      const possiblePaths = [
+        gitPath.replace(/\/mingw64\/libexec\/git-core$/, '/bin/bash.exe').replace(/\\mingw64\\libexec\\git-core$/, '\\bin\\bash.exe'),
+        gitPath.replace(/\/libexec\/git-core$/, '/bin/bash.exe').replace(/\\libexec\\git-core$/, '\\bin\\bash.exe'),
+        gitPath.replace(/\/mingw64\/libexec\/git-core$/, '/usr/bin/bash.exe').replace(/\\mingw64\\libexec\\git-core$/, '\\usr\\bin\\bash.exe'),
+      ]
+      
+      for (const bashPath of possiblePaths) {
+        if (bashPath === gitPath) continue
+        try {
+          const bashResult = crossSpawn.sync(bashPath, ['-c', 'exit 0'], { stdio: 'ignore' })
+          if (bashResult.status === 0) {
+            return { shell: bashPath, args: ['-c'], name: 'bash' }
+          }
+        } catch {}
+      }
+    }
+  } catch {}
+
   const psPaths = ['pwsh.exe', 'powershell.exe']
   for (const ps of psPaths) {
     try {
@@ -48,22 +71,6 @@ function getShellConfig(): ShellConfig {
       }
     } catch {}
   }
-
-  try {
-    const gitResult = crossSpawn.sync('git', ['--exec-path'], { encoding: 'utf-8' })
-    if (gitResult.status === 0 && gitResult.stdout) {
-      const gitPath = gitResult.stdout.trim()
-      const gitBashPath = gitPath.replace(/\/libexec\/git-core$/, '/bin/bash.exe').replace(/\\libexec\\git-core$/, '\\bin\\bash.exe')
-      if (gitBashPath !== gitPath) {
-        try {
-          const bashResult = crossSpawn.sync(gitBashPath, ['-c', 'exit 0'], { stdio: 'ignore' })
-          if (bashResult.status === 0) {
-            return { shell: gitBashPath, args: ['-c'], name: 'bash' }
-          }
-        } catch {}
-      }
-    }
-  } catch {}
 
   return { shell: 'cmd.exe', args: ['/c'], name: 'cmd' }
 }
@@ -120,11 +127,16 @@ export const BashTool = defineTool({
     const timeoutMs = Math.min(userTimeout || 120000, 600000)
     const cwd = input.workdir || context.cwd
 
+    // PowerShell UTF-8 encoding fix
+    const finalCommand = shellConfig.name === 'powershell'
+      ? `[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; ${command}`
+      : command
+
     return new Promise<string>((resolve) => {
       const chunks: Buffer[] = []
       const errChunks: Buffer[] = []
 
-      const proc = crossSpawn(shellConfig.shell, [...shellConfig.args, command], {
+      const proc = crossSpawn(shellConfig.shell, [...shellConfig.args, finalCommand], {
         cwd,
         env: { ...process.env },
         timeout: timeoutMs,
