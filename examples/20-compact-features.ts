@@ -93,6 +93,7 @@ After reading each file, provide a brief summary before moving to the next.`
         console.log(`Turns: ${e.num_turns}`)
         console.log(`Compacts triggered: ${compactCount}`)
         console.log(`Tokens: ${e.usage?.input_tokens?.toLocaleString()} in / ${e.usage?.output_tokens?.toLocaleString()} out`)
+        console.log(`Cache read: ${(e.usage?.cache_read_input_tokens ?? 0).toLocaleString()} / Cache creation: ${(e.usage?.cache_creation_input_tokens ?? 0).toLocaleString()}`)
         if (e.errors?.length) {
           console.log(`Errors: ${e.errors.join(', ')}`)
         }
