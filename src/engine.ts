@@ -395,8 +395,8 @@ export class QueryEngine {
               chunks.push(chunk)
 
               if (chunk.type === 'usage' && chunk.usage) {
-                streamUsage.input_tokens += chunk.usage.input_tokens
-                streamUsage.output_tokens += chunk.usage.output_tokens
+                streamUsage.input_tokens = chunk.usage.input_tokens
+                streamUsage.output_tokens = chunk.usage.output_tokens
               }
 
               if (chunk.type === 'text' || chunk.type === 'thinking') {
