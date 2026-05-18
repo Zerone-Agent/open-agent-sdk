@@ -74,6 +74,10 @@ After reading each file, provide a brief summary before moving to the next.`
             console.log(`\n💬 [Turn ${turnCount}] ${block.text.slice(0, 200)}${block.text.length > 200 ? '...' : ''}`)
           }
         }
+        const u = (event as any).usage
+        if (u) {
+          console.log(`  📊 Tokens: ${u.input_tokens?.toLocaleString()} in / ${u.output_tokens?.toLocaleString()} out | Cache read: ${u.cache_read_input_tokens ?? 0} / Cache creation: ${u.cache_creation_input_tokens ?? 0}`)
+        }
         break
       }
 

@@ -73,6 +73,7 @@ export interface SDKAssistantMessage {
     content: ContentBlock[]
   }
   parent_tool_use_id?: string | null
+  usage?: TokenUsage
 }
 
 export interface SDKToolResultMessage {

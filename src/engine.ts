@@ -480,18 +480,10 @@ export class QueryEngine {
 
       // Track usage (normalized by provider)
       if (response.usage) {
-        this.totalUsage.input_tokens += response.usage.input_tokens
-        this.totalUsage.output_tokens += response.usage.output_tokens
-        if (response.usage.cache_creation_input_tokens) {
-          this.totalUsage.cache_creation_input_tokens =
-            (this.totalUsage.cache_creation_input_tokens || 0) +
-            response.usage.cache_creation_input_tokens
-        }
-        if (response.usage.cache_read_input_tokens) {
-          this.totalUsage.cache_read_input_tokens =
-            (this.totalUsage.cache_read_input_tokens || 0) +
-            response.usage.cache_read_input_tokens
-        }
+        this.totalUsage.input_tokens = response.usage.input_tokens
+        this.totalUsage.output_tokens = response.usage.output_tokens
+        this.totalUsage.cache_creation_input_tokens = response.usage.cache_creation_input_tokens
+        this.totalUsage.cache_read_input_tokens = response.usage.cache_read_input_tokens
         this.totalCost += estimateCost(this.config.model, response.usage)
         this.compactState.lastInputTokens = response.usage.input_tokens
         this.compactState.lastOutputTokens = response.usage.output_tokens
@@ -509,6 +501,7 @@ export class QueryEngine {
           role: 'assistant',
           content: response.content as any,
         },
+        usage: response.usage,
       }
 
       // Handle max_output_tokens recovery
