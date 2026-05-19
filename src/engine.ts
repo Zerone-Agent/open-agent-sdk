@@ -329,10 +329,12 @@ export class QueryEngine {
       if (shouldAutoCompact(this.compactState, this.config.model, this.config.contextWindow)) {
         await this.executeHooks('PreCompact')
         try {
+          const lastMsg = this.messages[this.messages.length - 1]
+          const historyMsgs = this.messages.slice(0, -1)
           const stream = compactConversationStream(
             this.provider,
             this.config.model,
-            this.messages as any[],
+            historyMsgs as any[],
             this.compactState,
           )
           let result: import('./utils/compact.js').CompactResult
@@ -344,7 +346,10 @@ export class QueryEngine {
             }
             yield next.value
           }
-          this.messages = result.compactedMessages as NormalizedMessageParam[]
+          this.messages = [
+            ...result.compactedMessages as NormalizedMessageParam[],
+            lastMsg,
+          ]
           this.compactState = result.state
           await this.executeHooks('PostCompact')
         } catch {

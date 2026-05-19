@@ -100,6 +100,7 @@ export async function* compactConversationStream(
   model: string,
   messages: any[],
   state: AutoCompactState,
+  debug?: boolean,
 ): AsyncGenerator<SDKCompactMessage, CompactResult> {
   yield { type: 'compact', phase: 'start' }
 
@@ -111,6 +112,14 @@ export async function* compactConversationStream(
       maxTokens: 8192,
       system: COMPACT_SYSTEM_PROMPT,
       messages: [{ role: 'user' as const, content: compactionPrompt }],
+    }
+
+    if (debug) {
+      yield {
+        type: 'compact' as const,
+        phase: 'progress' as const,
+        text: `\n[DEBUG] === COMPACT INPUT ===\n[DEBUG] System prompt:\n${COMPACT_SYSTEM_PROMPT}\n[DEBUG] Messages count: ${messages.length}\n[DEBUG] Compaction prompt length: ${compactionPrompt.length.toLocaleString()} chars\n[DEBUG] === COMPACT PROMPT START ===\n${compactionPrompt}\n[DEBUG] === COMPACT PROMPT END ===\n`,
+      }
     }
 
     let summary = ''
