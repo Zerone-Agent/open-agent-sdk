@@ -20,6 +20,8 @@ export interface SessionMetadata {
   updatedAt: string
   messageCount: number
   summary?: string
+  lastInputTokens?: number
+  lastOutputTokens?: number
 }
 
 /**
@@ -65,6 +67,8 @@ export async function saveSession(
       updatedAt: new Date().toISOString(),
       messageCount: messages.length,
       summary: metadata.summary,
+      lastInputTokens: metadata.lastInputTokens,
+      lastOutputTokens: metadata.lastOutputTokens,
     },
     messages,
   }

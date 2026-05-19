@@ -64,6 +64,7 @@ export interface CreateMessageResponse {
   usage: {
     input_tokens: number
     output_tokens: number
+    totalInputTokens: number
     cache_creation_input_tokens?: number
     cache_read_input_tokens?: number
   }
@@ -84,6 +85,7 @@ export interface StreamChunk {
   usage?: {
     input_tokens: number
     output_tokens: number
+    totalInputTokens: number
     cache_creation_input_tokens?: number
     cache_read_input_tokens?: number
   }

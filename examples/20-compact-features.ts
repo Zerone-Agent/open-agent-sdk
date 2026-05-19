@@ -88,7 +88,7 @@ After reading each file, provide a brief summary before moving to the next.`
         }
         const u = (event as any).usage
         if (u) {
-          console.log(`  📊 Tokens: ${u.input_tokens?.toLocaleString()} in / ${u.output_tokens?.toLocaleString()} out | Cache read: ${u.cache_read_input_tokens ?? 0} / Cache creation: ${u.cache_creation_input_tokens ?? 0}`)
+          console.log(`  📊 Tokens: ${(u.totalInputTokens ?? u.input_tokens)?.toLocaleString()} in / ${u.output_tokens?.toLocaleString()} out | Cache read: ${u.cache_read_input_tokens ?? 0} / Cache creation: ${u.cache_creation_input_tokens ?? 0}`)
         }
         break
       }
@@ -108,7 +108,7 @@ After reading each file, provide a brief summary before moving to the next.`
         console.log(`FINAL RESULT: ${e.subtype}`)
         console.log(`Turns: ${e.num_turns}`)
         console.log(`Compacts triggered: ${compactCount}`)
-        console.log(`Tokens: ${e.usage?.input_tokens?.toLocaleString()} in / ${e.usage?.output_tokens?.toLocaleString()} out`)
+        console.log(`Tokens: ${(e.usage?.totalInputTokens ?? e.usage?.input_tokens)?.toLocaleString()} in / ${e.usage?.output_tokens?.toLocaleString()} out`)
         console.log(`Cache read: ${(e.usage?.cache_read_input_tokens ?? 0).toLocaleString()} / Cache creation: ${(e.usage?.cache_creation_input_tokens ?? 0).toLocaleString()}`)
         if (e.errors?.length) {
           console.log(`Errors: ${e.errors.join(', ')}`)
