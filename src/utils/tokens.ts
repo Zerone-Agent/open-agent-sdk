@@ -93,13 +93,10 @@ export function getContextWindowSize(model: string): number {
 /**
  * Auto-compact buffer: trigger compaction when within this many tokens of the limit.
  */
-export const AUTOCOMPACT_BUFFER_TOKENS = 13_000
+export const AUTOCOMPACT_BUFFER_TOKENS = 20_000
 
-/**
- * Get the auto-compact threshold for a model.
- */
-export function getAutoCompactThreshold(model: string): number {
-  return getContextWindowSize(model) - AUTOCOMPACT_BUFFER_TOKENS
+export function getAutoCompactThreshold(model: string, contextWindow?: number): number {
+  return (contextWindow ?? getContextWindowSize(model)) - AUTOCOMPACT_BUFFER_TOKENS
 }
 
 /**

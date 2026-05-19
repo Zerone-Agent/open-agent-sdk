@@ -3,52 +3,51 @@
  *
  * Summarizes long conversation histories when context window fills up.
  * Three-tier system:
- * 1. Auto-compact: triggered when tokens exceed threshold
- * 2. Micro-compact: cache-aware per-request optimization
- * 3. Session memory compaction: consolidates across sessions
+ * 1. Pruning: replace old large tool results with placeholder
+ * 2. Auto-compact: triggered when tokens exceed threshold
+ * 3. Micro-compact: cache-aware per-request optimization
  */
 
 import type { LLMProvider } from '../providers/types.js'
 import type { NormalizedMessageParam } from '../providers/types.js'
+import type { SDKCompactMessage } from '../types.js'
 import {
-  estimateMessagesTokens,
   getAutoCompactThreshold,
 } from './tokens.js'
 
-/**
- * State for tracking auto-compaction across turns.
- */
+export const PRUNE_PROTECTED_TURNS = 2
+export const PRUNE_THRESHOLD_CHARS = 20_000
+
 export interface AutoCompactState {
   compacted: boolean
   turnCounter: number
   consecutiveFailures: number
+  lastInputTokens: number
+  lastOutputTokens: number
 }
 
-/**
- * Create initial auto-compact state.
- */
 export function createAutoCompactState(): AutoCompactState {
   return {
     compacted: false,
     turnCounter: 0,
     consecutiveFailures: 0,
+    lastInputTokens: 0,
+    lastOutputTokens: 0,
   }
 }
 
-/**
- * Check if auto-compaction should trigger.
- */
 export function shouldAutoCompact(
-  messages: any[],
-  model: string,
   state: AutoCompactState,
+  model: string,
+  contextWindow?: number,
 ): boolean {
   if (state.consecutiveFailures >= 3) return false
+  if (state.lastInputTokens <= 0) return false
 
-  const estimatedTokens = estimateMessagesTokens(messages)
-  const threshold = getAutoCompactThreshold(model)
+  const threshold = getAutoCompactThreshold(model, contextWindow)
+  const conversationTokens = state.lastInputTokens + state.lastOutputTokens
 
-  return estimatedTokens >= threshold
+  return conversationTokens >= threshold
 }
 
 /**
@@ -57,33 +56,121 @@ export function shouldAutoCompact(
  * Sends the entire conversation to the LLM for summarization,
  * then replaces the history with a compact summary.
  */
+const COMPACT_SYSTEM_PROMPT = `You are a conversation summarizer. When constructing the summary, stick to this template:
+
+## Goal
+[What goal(s) is the user trying to accomplish?]
+
+## Instructions
+- [What important instructions did the user give you that are relevant]
+- [If there is a plan or spec, include information about it so next agent can continue using it]
+
+## Discoveries
+[What notable things were learned during this conversation that would be useful for the next agent to know when continuing the work]
+
+## Accomplished
+[What work has been completed, what work is still in progress, and what work is left?]
+
+## Relevant files / directories
+[Construct a structured list of relevant files that have been read, edited, or created that pertain to the task at hand. If all the files in a directory are relevant, include the path to the directory.]
+
+The summary should allow the conversation to continue seamlessly.`
+
+function buildCompactedMessages(summary: string): NormalizedMessageParam[] {
+  return [
+    {
+      role: 'user',
+      content: `[Previous conversation summary]\n\n${summary}\n\n[End of summary - conversation continues below]`,
+    },
+    {
+      role: 'assistant',
+      content: 'I understand the context from the previous conversation. I\'ll continue from where we left off.',
+    },
+  ]
+}
+
+export interface CompactResult {
+  compactedMessages: NormalizedMessageParam[]
+  summary: string
+  state: AutoCompactState
+}
+
+export async function* compactConversationStream(
+  provider: LLMProvider,
+  model: string,
+  messages: any[],
+  state: AutoCompactState,
+): AsyncGenerator<SDKCompactMessage, CompactResult> {
+  yield { type: 'compact', phase: 'start' }
+
+  try {
+    const strippedMessages = stripImagesFromMessages(messages)
+    const compactionPrompt = buildCompactionPrompt(strippedMessages)
+    const requestParams = {
+      model,
+      maxTokens: 8192,
+      system: COMPACT_SYSTEM_PROMPT,
+      messages: [{ role: 'user' as const, content: compactionPrompt }],
+    }
+
+    let summary = ''
+
+    if (provider.createMessageStream) {
+      for await (const chunk of provider.createMessageStream(requestParams)) {
+        if (chunk.type === 'text' && chunk.delta) {
+          summary += chunk.delta
+          yield { type: 'compact', phase: 'progress', text: chunk.delta }
+        }
+      }
+    } else {
+      const response = await provider.createMessage(requestParams)
+      summary = response.content
+        .filter((b) => b.type === 'text')
+        .map((b) => (b as { type: 'text'; text: string }).text)
+        .join('\n')
+    }
+
+    yield { type: 'compact', phase: 'end', summary }
+
+    return {
+      compactedMessages: buildCompactedMessages(summary),
+      summary,
+      state: {
+        compacted: true,
+        turnCounter: state.turnCounter,
+        consecutiveFailures: 0,
+        lastInputTokens: 0,
+        lastOutputTokens: 0,
+      },
+    }
+  } catch (err: any) {
+    yield { type: 'compact', phase: 'end', summary: '' }
+    return {
+      compactedMessages: messages as NormalizedMessageParam[],
+      summary: '',
+      state: {
+        ...state,
+        consecutiveFailures: state.consecutiveFailures + 1,
+      },
+    }
+  }
+}
+
 export async function compactConversation(
   provider: LLMProvider,
   model: string,
   messages: any[],
   state: AutoCompactState,
-): Promise<{
-  compactedMessages: NormalizedMessageParam[]
-  summary: string
-  state: AutoCompactState
-}> {
+): Promise<CompactResult> {
   try {
-    // Strip images before compacting to save tokens
     const strippedMessages = stripImagesFromMessages(messages)
-
-    // Build compaction prompt
     const compactionPrompt = buildCompactionPrompt(strippedMessages)
 
     const response = await provider.createMessage({
       model,
       maxTokens: 8192,
-      system: 'You are a conversation summarizer. Create a detailed summary of the conversation that preserves all important context, decisions made, files modified, tool outputs, and current state. The summary should allow the conversation to continue seamlessly.',
-      messages: [
-        {
-          role: 'user',
-          content: compactionPrompt,
-        },
-      ],
+      system: COMPACT_SYSTEM_PROMPT,
+      messages: [{ role: 'user', content: compactionPrompt }],
     })
 
     const summary = response.content
@@ -91,25 +178,15 @@ export async function compactConversation(
       .map((b) => (b as { type: 'text'; text: string }).text)
       .join('\n')
 
-    // Replace messages with summary
-    const compactedMessages: NormalizedMessageParam[] = [
-      {
-        role: 'user',
-        content: `[Previous conversation summary]\n\n${summary}\n\n[End of summary - conversation continues below]`,
-      },
-      {
-        role: 'assistant',
-        content: 'I understand the context from the previous conversation. I\'ll continue from where we left off.',
-      },
-    ]
-
     return {
-      compactedMessages,
+      compactedMessages: buildCompactedMessages(summary),
       summary,
       state: {
         compacted: true,
         turnCounter: state.turnCounter,
         consecutiveFailures: 0,
+        lastInputTokens: 0,
+        lastOutputTokens: 0,
       },
     }
   } catch (err: any) {
@@ -179,6 +256,37 @@ function buildCompactionPrompt(messages: any[]): string {
  * Micro-compact: optimize messages by truncating large tool results
  * to fit within token budgets.
  */
+export function pruneMessages(messages: any[]): void {
+  const userMsgIndices: number[] = []
+  for (let i = 0; i < messages.length; i++) {
+    if (messages[i].role === 'user') {
+      userMsgIndices.push(i)
+    }
+  }
+
+  const protectedStart = Math.max(0, userMsgIndices.length - PRUNE_PROTECTED_TURNS)
+  const protectedIndices = new Set(
+    userMsgIndices.slice(protectedStart),
+  )
+
+  for (let i = 0; i < messages.length; i++) {
+    if (protectedIndices.has(i)) continue
+
+    const msg = messages[i]
+    if (msg.role !== 'user' || !Array.isArray(msg.content)) continue
+
+    for (const block of msg.content) {
+      if (
+        block.type === 'tool_result' &&
+        typeof block.content === 'string' &&
+        block.content.length > PRUNE_THRESHOLD_CHARS
+      ) {
+        block.content = '[Old tool result content cleared]'
+      }
+    }
+  }
+}
+
 export function microCompactMessages(
   messages: any[],
   maxToolResultChars: number = 50000,

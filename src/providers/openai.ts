@@ -213,6 +213,7 @@ export class OpenAIProvider implements LLMProvider {
           usage: {
             input_tokens: chunk.usage.prompt_tokens || 0,
             output_tokens: chunk.usage.completion_tokens || 0,
+            cache_read_input_tokens: (chunk.usage as any)?.prompt_tokens_details?.cached_tokens || undefined,
           },
         }
       }
@@ -469,6 +470,7 @@ export class OpenAIProvider implements LLMProvider {
       usage: {
         input_tokens: data.usage?.prompt_tokens || 0,
         output_tokens: data.usage?.completion_tokens || 0,
+        cache_read_input_tokens: (data.usage as any)?.prompt_tokens_details?.cached_tokens || undefined,
       },
     }
   }

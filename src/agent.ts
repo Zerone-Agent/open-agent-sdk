@@ -333,6 +333,7 @@ export class Agent {
       sessionId: this.sid,
       settingSources: opts.settingSources,
       allowedSkills: opts.allowedSkills,
+      contextWindow: opts.contextWindow,
     })
     this.currentEngine = engine
 

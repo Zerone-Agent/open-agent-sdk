@@ -57,6 +57,7 @@ export type SDKMessage =
   | SDKPartialMessage
   | SDKSystemMessage
   | SDKCompactBoundaryMessage
+  | SDKCompactMessage
   | SDKStatusMessage
   | SDKTaskNotificationMessage
   | SDKRateLimitEvent
@@ -72,6 +73,7 @@ export interface SDKAssistantMessage {
     content: ContentBlock[]
   }
   parent_tool_use_id?: string | null
+  usage?: TokenUsage
 }
 
 export interface SDKToolResultMessage {
@@ -140,6 +142,14 @@ export interface SDKSkillsUpdatedMessage {
 export interface SDKCompactBoundaryMessage {
   type: 'system'
   subtype: 'compact_boundary'
+  summary?: string
+}
+
+/** Streaming events emitted during auto-compaction. */
+export interface SDKCompactMessage {
+  type: 'compact'
+  phase: 'start' | 'progress' | 'end'
+  text?: string
   summary?: string
 }
 
@@ -482,6 +492,8 @@ export interface AgentOptions {
   onSkillsUpdated?: (event: import('./types.js').SDKSkillsUpdatedMessage) => void
   /** Permission prompt tool name override */
   permissionPromptToolName?: string
+  /** Context window size in tokens for the model. Overrides auto-detection from model name. */
+  contextWindow?: number
   /** Hook configurations */
   hooks?: Record<string, Array<{
     matcher?: string
@@ -532,4 +544,6 @@ export interface QueryEngineConfig {
   settingSources?: SettingSource[]
   /** Skill names to allow (whitelist). If undefined or empty, only project skills are allowed. */
   allowedSkills?: string[]
+  /** Context window size in tokens for the model. Overrides auto-detection from model name. */
+  contextWindow?: number
 }

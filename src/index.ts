@@ -262,8 +262,12 @@ export {
 export {
   shouldAutoCompact,
   compactConversation,
+  compactConversationStream,
   microCompactMessages,
+  pruneMessages,
   createAutoCompactState,
+  PRUNE_PROTECTED_TURNS,
+  PRUNE_THRESHOLD_CHARS,
 } from './utils/compact.js'
 export type { AutoCompactState } from './utils/compact.js'
 

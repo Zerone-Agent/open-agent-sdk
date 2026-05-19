@@ -33,7 +33,9 @@ import {
 import {
   shouldAutoCompact,
   compactConversation,
+  compactConversationStream,
   microCompactMessages,
+  pruneMessages,
   createAutoCompactState,
   type AutoCompactState,
 } from './utils/compact.js'
@@ -324,15 +326,24 @@ export class QueryEngine {
       }
 
       // Auto-compact if context is too large
-      if (shouldAutoCompact(this.messages as any[], this.config.model, this.compactState)) {
+      if (shouldAutoCompact(this.compactState, this.config.model, this.config.contextWindow)) {
         await this.executeHooks('PreCompact')
         try {
-          const result = await compactConversation(
+          const stream = compactConversationStream(
             this.provider,
             this.config.model,
             this.messages as any[],
             this.compactState,
           )
+          let result: import('./utils/compact.js').CompactResult
+          while (true) {
+            const next = await stream.next()
+            if (next.done) {
+              result = next.value
+              break
+            }
+            yield next.value
+          }
           this.messages = result.compactedMessages as NormalizedMessageParam[]
           this.compactState = result.state
           await this.executeHooks('PostCompact')
@@ -384,8 +395,8 @@ export class QueryEngine {
               chunks.push(chunk)
 
               if (chunk.type === 'usage' && chunk.usage) {
-                streamUsage.input_tokens += chunk.usage.input_tokens
-                streamUsage.output_tokens += chunk.usage.output_tokens
+                streamUsage.input_tokens = chunk.usage.input_tokens
+                streamUsage.output_tokens = chunk.usage.output_tokens
               }
 
               if (chunk.type === 'text' || chunk.type === 'thinking') {
@@ -469,20 +480,16 @@ export class QueryEngine {
 
       // Track usage (normalized by provider)
       if (response.usage) {
-        this.totalUsage.input_tokens += response.usage.input_tokens
-        this.totalUsage.output_tokens += response.usage.output_tokens
-        if (response.usage.cache_creation_input_tokens) {
-          this.totalUsage.cache_creation_input_tokens =
-            (this.totalUsage.cache_creation_input_tokens || 0) +
-            response.usage.cache_creation_input_tokens
-        }
-        if (response.usage.cache_read_input_tokens) {
-          this.totalUsage.cache_read_input_tokens =
-            (this.totalUsage.cache_read_input_tokens || 0) +
-            response.usage.cache_read_input_tokens
-        }
+        this.totalUsage.input_tokens = response.usage.input_tokens
+        this.totalUsage.output_tokens = response.usage.output_tokens
+        this.totalUsage.cache_creation_input_tokens = response.usage.cache_creation_input_tokens
+        this.totalUsage.cache_read_input_tokens = response.usage.cache_read_input_tokens
         this.totalCost += estimateCost(this.config.model, response.usage)
+        this.compactState.lastInputTokens = response.usage.input_tokens
+        this.compactState.lastOutputTokens = response.usage.output_tokens
       }
+
+      pruneMessages(this.messages)
 
       // Add assistant message to conversation
       this.messages.push({ role: 'assistant', content: response.content as any })
@@ -494,6 +501,7 @@ export class QueryEngine {
           role: 'assistant',
           content: response.content as any,
         },
+        usage: response.usage,
       }
 
       // Handle max_output_tokens recovery
