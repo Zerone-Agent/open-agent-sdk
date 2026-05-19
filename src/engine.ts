@@ -36,6 +36,7 @@ import {
   compactConversationStream,
   microCompactMessages,
   pruneMessages,
+  PRUNE_PROTECTED_TURNS,
   createAutoCompactState,
   type AutoCompactState,
 } from './utils/compact.js'
@@ -154,10 +155,16 @@ export class QueryEngine {
   private apiTimeMs = 0
   private hookRegistry?: HookRegistry
 
-  constructor(config: QueryEngineConfig) {
+  constructor(config: QueryEngineConfig, initialUsage?: { lastInputTokens?: number; lastOutputTokens?: number }) {
     this.config = config
     this.provider = config.provider
     this.compactState = createAutoCompactState()
+    if (initialUsage?.lastInputTokens) {
+      this.compactState.lastInputTokens = initialUsage.lastInputTokens
+    }
+    if (initialUsage?.lastOutputTokens) {
+      this.compactState.lastOutputTokens = initialUsage.lastOutputTokens
+    }
     this.sessionId = config.sessionId || crypto.randomUUID()
     this.hookRegistry = config.hookRegistry
   }
@@ -232,7 +239,7 @@ export class QueryEngine {
     return {
       content,
       stopReason: hasToolUse ? 'tool_use' : 'end_turn',
-      usage: { input_tokens: 0, output_tokens: 0 },
+      usage: { input_tokens: 0, output_tokens: 0, totalInputTokens: 0 },
     }
   }
 
@@ -331,10 +338,25 @@ export class QueryEngine {
         try {
           const lastMsg = this.messages[this.messages.length - 1]
           const historyMsgs = this.messages.slice(0, -1)
+
+          const userMsgIndices: number[] = []
+          for (let i = 0; i < historyMsgs.length; i++) {
+            if ((historyMsgs[i] as any).role === 'user') {
+              userMsgIndices.push(i)
+            }
+          }
+          const protectedStart = Math.max(0, userMsgIndices.length - PRUNE_PROTECTED_TURNS)
+          const cutoffIndex = protectedStart < userMsgIndices.length
+            ? userMsgIndices[protectedStart]
+            : historyMsgs.length
+
+          const headMsgs = historyMsgs.slice(0, cutoffIndex)
+          const tailMsgs = historyMsgs.slice(cutoffIndex)
+
           const stream = compactConversationStream(
             this.provider,
             this.config.model,
-            historyMsgs as any[],
+            headMsgs as any[],
             this.compactState,
           )
           let result: import('./utils/compact.js').CompactResult
@@ -348,6 +370,7 @@ export class QueryEngine {
           }
           this.messages = [
             ...result.compactedMessages as NormalizedMessageParam[],
+            ...tailMsgs as NormalizedMessageParam[],
             lastMsg,
           ]
           this.compactState = result.state
@@ -377,7 +400,7 @@ export class QueryEngine {
           }
 
           const chunks: import('./providers/types.js').StreamChunk[] = []
-          const streamUsage = { input_tokens: 0, output_tokens: 0 }
+          const streamUsage = { input_tokens: 0, output_tokens: 0, totalInputTokens: 0 }
 
           try {
             for await (const chunk of this.provider.createMessageStream({
@@ -402,6 +425,7 @@ export class QueryEngine {
               if (chunk.type === 'usage' && chunk.usage) {
                 streamUsage.input_tokens = chunk.usage.input_tokens
                 streamUsage.output_tokens = chunk.usage.output_tokens
+                streamUsage.totalInputTokens = chunk.usage.totalInputTokens || chunk.usage.input_tokens
               }
 
               if (chunk.type === 'text' || chunk.type === 'thinking') {
@@ -490,7 +514,7 @@ export class QueryEngine {
         this.totalUsage.cache_creation_input_tokens = response.usage.cache_creation_input_tokens
         this.totalUsage.cache_read_input_tokens = response.usage.cache_read_input_tokens
         this.totalCost += estimateCost(this.config.model, response.usage)
-        this.compactState.lastInputTokens = response.usage.input_tokens
+        this.compactState.lastInputTokens = response.usage.totalInputTokens || response.usage.input_tokens
         this.compactState.lastOutputTokens = response.usage.output_tokens
       }
 
@@ -869,5 +893,15 @@ export class QueryEngine {
    */
   getCost(): number {
     return this.totalCost
+  }
+
+  /**
+   * Get current compact state for persistence.
+   */
+  getState(): { lastInputTokens: number; lastOutputTokens: number } {
+    return {
+      lastInputTokens: this.compactState.lastInputTokens,
+      lastOutputTokens: this.compactState.lastOutputTokens,
+    }
   }
 }

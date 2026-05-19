@@ -62,6 +62,8 @@ export class Agent {
   private abortCtrl: AbortController | null = null
   private currentEngine: QueryEngine | null = null
   private hookRegistry: HookRegistry
+  private lastInputTokens = 0
+  private lastOutputTokens = 0
 
   constructor(options: AgentOptions = {}) {
     // Shallow copy to avoid mutating caller's object
@@ -220,6 +222,12 @@ export class Agent {
       if (sessionData) {
         this.history = sessionData.messages
         this.sid = this.cfg.resume
+        if (sessionData.metadata.lastInputTokens) {
+          this.lastInputTokens = sessionData.metadata.lastInputTokens
+        }
+        if (sessionData.metadata.lastOutputTokens) {
+          this.lastOutputTokens = sessionData.metadata.lastOutputTokens
+        }
       }
     }
 
@@ -334,7 +342,7 @@ export class Agent {
       settingSources: opts.settingSources,
       allowedSkills: opts.allowedSkills,
       contextWindow: opts.contextWindow,
-    })
+    }, { lastInputTokens: this.lastInputTokens, lastOutputTokens: this.lastOutputTokens })
     this.currentEngine = engine
 
     // Inject existing conversation history
@@ -360,6 +368,9 @@ export class Agent {
       }
     } finally {
       this.history = engine.getMessages()
+      const engineState = engine.getState()
+      this.lastInputTokens = engineState.lastInputTokens
+      this.lastOutputTokens = engineState.lastOutputTokens
 
       this.messageLog.push({
         type: 'user',
@@ -374,6 +385,8 @@ export class Agent {
             cwd: this.cfg.cwd || process.cwd(),
             model: this.modelId,
             summary: undefined,
+            lastInputTokens: this.lastInputTokens,
+            lastOutputTokens: this.lastOutputTokens,
           })
         } catch {
           // best-effort
@@ -586,6 +599,8 @@ export class Agent {
           cwd: this.cfg.cwd || process.cwd(),
           model: this.modelId,
           summary: undefined,
+          lastInputTokens: this.lastInputTokens,
+          lastOutputTokens: this.lastOutputTokens,
         })
       } catch {
         // Session persistence is best-effort
