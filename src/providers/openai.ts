@@ -361,15 +361,15 @@ export class OpenAIProvider implements LLMProvider {
       return
     }
 
-    // Extract text and tool_use blocks
     const textParts: string[] = []
     const toolCalls: OpenAIToolCall[] = []
+    const thinkingParts: string[] = []
 
     for (const block of msg.content) {
       if (block.type === 'text') {
         textParts.push(block.text)
       } else if (block.type === 'thinking') {
-        // Skip thinking blocks — OpenAI-compatible models don't need them in requests
+        thinkingParts.push((block as any).thinking || '')
       } else if (block.type === 'tool_use') {
         toolCalls.push({
           id: block.id,
@@ -391,6 +391,10 @@ export class OpenAIProvider implements LLMProvider {
 
     if (toolCalls.length > 0) {
       assistantMsg.tool_calls = toolCalls
+    }
+
+    if (thinkingParts.length > 0) {
+      assistantMsg.reasoning_content = thinkingParts.join('\n')
     }
 
     result.push(assistantMsg)
