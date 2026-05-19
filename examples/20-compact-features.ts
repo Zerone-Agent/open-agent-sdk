@@ -28,10 +28,22 @@ async function main() {
   const prompt = `Please perform these tasks in order, one at a time:
 1. Read src/utils/compact.ts and summarize what it does
 2. Read src/utils/tokens.ts and explain the token estimation
-3. Read src/engine.ts lines 1-200 and describe the QueryEngine class
+3. Read src/engine.ts and describe the QueryEngine class
 4. Read src/utils/messages.ts and explain message normalization
-5. Read src/types.ts lines 1-200 and list the key types
-6. Read package.json and describe the project
+5. Read src/types.ts and list the key types
+6. Read src/providers/anthropic.ts and explain the Anthropic provider
+7. Read src/providers/openai.ts and explain the OpenAI provider
+8. Read src/providers/types.ts and explain provider types
+9. Read src/agent.ts and explain the Agent class
+10. Read src/tools/index.ts and list available tools
+11. Read src/tools/bash.ts and explain the Bash tool
+12. Read src/tools/read.ts and explain the Read tool
+13. Read src/tools/edit.ts and explain the Edit tool
+14. Read src/tools/write.ts and explain the Write tool
+15. Read src/tools/glob.ts and explain the Glob tool
+16. Read src/tools/grep.ts and explain the Grep tool
+17. Read src/prompts/system-prompts.ts and explain system prompts
+18. Read package.json and describe the project
 After reading each file, provide a brief summary before moving to the next.`
 
   console.log(`USER: ${prompt}\n`)
