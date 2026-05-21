@@ -31,11 +31,7 @@ export const AskUserQuestionTool: ToolDefinition = {
   name: 'AskUserQuestion',
   description: `Ask the user a question with required choices. When your question has clear options for the user to select, prefer this tool over asking directly in plain text.
 
-Suitable scenarios:
-- User needs to choose from multiple options (e.g., plan selection, file selection)
-- Explicit confirmation before high-risk operations
-- User instruction is ambiguous and needs clarification
-- Interactive Q&A: personality tests, surveys, story interactions where you need per-question feedback
+Useful when you need the user to make a choice or provide input. For interactive sessions (stories, quizzes, games), use this tool to present each question one at a time.
 
 Requirements:
 - MUST provide at least 2 options for the user to choose from
@@ -55,7 +51,7 @@ IMPORTANT: This tool does NOT support asking multiple questions at once. Each ca
       },
       allow_multiselect: {
         type: 'boolean',
-        description: 'Whether to allow multiple selections (for options)',
+        description: 'Whether to allow multiple selections',
       },
     },
     required: ['question', 'options'],
