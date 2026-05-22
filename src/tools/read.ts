@@ -8,7 +8,8 @@
  */
 
 import { readFile, stat } from 'fs/promises'
-import { resolve, extname } from 'path'
+import { resolve, extname, dirname } from 'path'
+import { fileURLToPath } from 'url'
 import { defineTool } from './types.js'
 
 const SAMPLE_BYTES = 4096
@@ -92,8 +93,14 @@ async function extractPdfText(filePath: string): Promise<ExtractPdfResult> {
   try {
     const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs')
 
+    let standardFontDataUrl: string | undefined
+    try {
+      const pdfjsPkgPath = require.resolve('pdfjs-dist/package.json')
+      standardFontDataUrl = dirname(pdfjsPkgPath) + '/standard_fonts/'
+    } catch {}
+
     const data = new Uint8Array(await readFile(filePath))
-    const doc = await pdfjs.getDocument({ data }).promise
+    const doc = await pdfjs.getDocument({ data, standardFontDataUrl }).promise
     const pageCount = doc.numPages
 
     let fullText = `--- PDF: ${filePath} (${pageCount} page${pageCount !== 1 ? 's' : ''}) ---\n\n`
