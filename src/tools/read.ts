@@ -124,10 +124,22 @@ async function extractPdfText(filePath: string): Promise<ExtractPdfResult> {
   for (let i = 1; i <= pageCount; i++) {
     const page = await doc.getPage(i)
     const content = await page.getTextContent()
-    const pageText = content.items
-      .map((item: any) => item.str)
-      .join('')
-      .trim()
+
+    const lines: string[] = []
+    let lastY: number | null = null
+    let currentLine = ''
+    for (const item of content.items) {
+      if (!(item as any).str) continue
+      const y = (item as any).transform?.[5]
+      if (lastY !== null && y !== null && Math.abs(y - lastY) > 2) {
+        if (currentLine.trim()) lines.push(currentLine.trim())
+        currentLine = ''
+      }
+      currentLine += (item as any).str
+      lastY = y ?? lastY
+    }
+    if (currentLine.trim()) lines.push(currentLine.trim())
+    const pageText = lines.join('\n')
 
     fullText += `=== Page ${i} ===\n${pageText}\n\n`
     page.cleanup()
