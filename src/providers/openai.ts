@@ -330,9 +330,10 @@ export class OpenAIProvider implements LLMProvider {
     for (const block of msg.content) {
       if (block.type === 'text') {
         textParts.push(block.text)
+      } else if (block.type === 'image' && (block as any).source?.type === 'base64') {
+        mediaAttachments.push({ mime: (block as any).source.media_type, data: (block as any).source.data })
       } else if (block.type === 'tool_result') {
         if (Array.isArray(block.content)) {
-          // Extract text parts and media from array content
           const textFromBlocks: string[] = []
           for (const b of block.content as any[]) {
             if (b.type === 'text') {
