@@ -40,7 +40,7 @@ export interface NormalizedMessageParam {
 export type NormalizedContentBlock =
   | { type: 'text'; text: string }
   | { type: 'tool_use'; id: string; name: string; input: any }
-  | { type: 'tool_result'; tool_use_id: string; content: string; is_error?: boolean }
+  | { type: 'tool_result'; tool_use_id: string; content: string | any[]; is_error?: boolean }
   | { type: 'image'; source: any }
   | { type: 'thinking'; thinking: string }
 
@@ -68,6 +68,7 @@ export interface CreateMessageResponse {
     cache_creation_input_tokens?: number
     cache_read_input_tokens?: number
   }
+  warnings?: string[]
 }
 
 export type NormalizedResponseBlock =
@@ -82,6 +83,7 @@ export interface StreamChunk {
   delta?: string
   name?: string
   input?: string
+  warnings?: string[]
   usage?: {
     input_tokens: number
     output_tokens: number

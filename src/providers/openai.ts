@@ -58,7 +58,7 @@ async function* parseSSEStream(response: Response): AsyncGenerator<any> {
 
 interface OpenAIChatMessage {
   role: 'system' | 'user' | 'assistant' | 'tool'
-  content?: string | null
+  content?: string | null | Array<{ type: string; text?: string; image_url?: { url: string; detail?: string } }>
   reasoning_content?: string | null
   reasoning?: string | null
   tool_calls?: OpenAIToolCall[]
@@ -118,7 +118,6 @@ export class OpenAIProvider implements LLMProvider {
   }
 
   async createMessage(params: CreateMessageParams): Promise<CreateMessageResponse> {
-    // Convert to OpenAI format
     const messages = this.convertMessages(params.system, params.messages)
     const tools = params.tools ? this.convertTools(params.tools) : undefined
 
@@ -136,8 +135,8 @@ export class OpenAIProvider implements LLMProvider {
       body.chat_template_kwargs = { enable_thinking: true }
     }
 
-    // Make API call
-    const response = await fetch(`${this.baseURL}/chat/completions`, {
+    let imageFallback = false
+    let response = await fetch(`${this.baseURL}/chat/completions`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -149,17 +148,44 @@ export class OpenAIProvider implements LLMProvider {
 
     if (!response.ok) {
       const errBody = await response.text().catch(() => '')
-      const err: any = new Error(
-        `OpenAI API error: ${response.status} ${response.statusText}: ${errBody}`,
-      )
-      err.status = response.status
-      throw err
+
+      if (this.isImageNotSupportedError(response.status, errBody) && this.hasImageContent(messages)) {
+        const strippedMessages = this.stripImageContent(messages)
+        const retryBody = { ...body, messages: strippedMessages }
+        response = await fetch(`${this.baseURL}/chat/completions`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${this.apiKey}`,
+          },
+          body: JSON.stringify(retryBody),
+          signal: params.signal,
+        })
+        if (!response.ok) {
+          const retryErrBody = await response.text().catch(() => '')
+          const err: any = new Error(
+            `OpenAI API error: ${response.status} ${response.statusText}: ${retryErrBody}`,
+          )
+          err.status = response.status
+          throw err
+        }
+        imageFallback = true
+      } else {
+        const err: any = new Error(
+          `OpenAI API error: ${response.status} ${response.statusText}: ${errBody}`,
+        )
+        err.status = response.status
+        throw err
+      }
     }
 
     const data = (await response.json()) as OpenAIChatResponse
 
-    // Convert response back to normalized format
-    return this.convertResponse(data)
+    const result = this.convertResponse(data)
+    if (imageFallback) {
+      result.warnings = ['Provider does not support image input; images were stripped from the request']
+    }
+    return result
   }
 
   async *createMessageStream(params: CreateMessageParams): AsyncGenerator<StreamChunk> {
@@ -182,34 +208,68 @@ export class OpenAIProvider implements LLMProvider {
       body.chat_template_kwargs = { enable_thinking: true }
     }
 
-    const response = await fetch(`${this.baseURL}/chat/completions`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${this.apiKey}`,
-      },
-      body: JSON.stringify(body),
-      signal: params.signal,
-    })
+    let response: Response
+    let imageFallback = false
+    try {
+      response = await fetch(`${this.baseURL}/chat/completions`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${this.apiKey}`,
+        },
+        body: JSON.stringify(body),
+        signal: params.signal,
+      })
+    } catch (err) {
+      throw err
+    }
 
     if (!response.ok) {
       const errBody = await response.text().catch(() => '')
-      const err: any = new Error(
-        `OpenAI API error: ${response.status} ${response.statusText}: ${errBody}`,
-      )
-      err.status = response.status
-      throw err
+
+      if (this.isImageNotSupportedError(response.status, errBody) && this.hasImageContent(messages)) {
+        const strippedMessages = this.stripImageContent(messages)
+        const retryBody = { ...body, messages: strippedMessages }
+        response = await fetch(`${this.baseURL}/chat/completions`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${this.apiKey}`,
+          },
+          body: JSON.stringify(retryBody),
+          signal: params.signal,
+        })
+        if (!response.ok) {
+          const retryErrBody = await response.text().catch(() => '')
+          const err: any = new Error(
+            `OpenAI API error: ${response.status} ${response.statusText}: ${retryErrBody}`,
+          )
+          err.status = response.status
+          throw err
+        }
+        imageFallback = true
+      } else {
+        const err: any = new Error(
+          `OpenAI API error: ${response.status} ${response.statusText}: ${errBody}`,
+        )
+        err.status = response.status
+        throw err
+      }
     }
+
+    const imageWarning = imageFallback
+      ? ['Provider does not support image input; images were stripped from the request']
+      : undefined
 
     let currentBlockIndex = -1
     const toolCalls: Map<number, { id: string; name: string; arguments: string }> = new Map()
 
     for await (const chunk of parseSSEStream(response)) {
-      // Handle usage in final chunk
       if (chunk.usage) {
         yield {
           type: 'usage',
           index: -1,
+          warnings: imageWarning,
           usage: {
             input_tokens: chunk.usage.prompt_tokens || 0,
             output_tokens: chunk.usage.completion_tokens || 0,
@@ -217,6 +277,7 @@ export class OpenAIProvider implements LLMProvider {
             cache_read_input_tokens: (chunk.usage as any)?.prompt_tokens_details?.cached_tokens || undefined,
           },
         }
+        if (imageWarning) imageWarning.length = 0
       }
 
       const choice = chunk.choices?.[0]
@@ -225,7 +286,6 @@ export class OpenAIProvider implements LLMProvider {
       const delta = choice.delta
       if (!delta) continue
 
-      // Reasoning/thinking content (DeepSeek-R1, Qwen-QWQ, vLLM Gemma, etc.)
       const reasoningContent = delta.reasoning_content || delta.reasoning
       if (reasoningContent) {
         yield {
@@ -235,7 +295,6 @@ export class OpenAIProvider implements LLMProvider {
         }
       }
 
-      // Text content
       if (delta.content) {
         yield {
           type: 'text',
@@ -244,7 +303,6 @@ export class OpenAIProvider implements LLMProvider {
         }
       }
 
-      // Tool calls
       if (delta.tool_calls) {
         for (const tc of delta.tool_calls) {
           const index = tc.index || 0
@@ -271,7 +329,6 @@ export class OpenAIProvider implements LLMProvider {
       }
     }
 
-    // Yield all accumulated tool calls after stream ends
     for await (const [index, call] of toolCalls) {
       if (call.name) {
         yield {
@@ -285,6 +342,45 @@ export class OpenAIProvider implements LLMProvider {
     }
 
     yield { type: 'done', index: -1 }
+  }
+
+  // --------------------------------------------------------------------------
+  // Image Fallback Helpers
+  // --------------------------------------------------------------------------
+
+  private isImageNotSupportedError(status: number, body: string): boolean {
+    if (status !== 404 && status !== 400) return false
+    const lower = body.toLowerCase()
+    if (lower.includes('image') && (lower.includes('not support') || lower.includes('no endpoint'))) return true
+    if (lower.includes('unknown variant') && lower.includes('image_url')) return true
+    if (lower.includes('image') && lower.includes('not supported')) return true
+    return false
+  }
+
+  private hasImageContent(messages: OpenAIChatMessage[]): boolean {
+    for (const msg of messages) {
+      if (Array.isArray(msg.content)) {
+        for (const part of msg.content) {
+          if (part.type === 'image_url') return true
+        }
+      }
+    }
+    return false
+  }
+
+  private stripImageContent(messages: OpenAIChatMessage[]): OpenAIChatMessage[] {
+    return messages.map((msg) => {
+      if (!Array.isArray(msg.content)) return msg
+      const stripped = msg.content.filter((part) => part.type !== 'image_url')
+      if (stripped.length === 0) {
+        return { ...msg, content: '(image content removed)' }
+      }
+      const textParts = stripped.filter((p) => p.type === 'text').map((p) => p.text).filter(Boolean)
+      if (textParts.length > 0 && stripped.every((p) => p.type === 'text')) {
+        return { ...msg, content: textParts.join('\n') }
+      }
+      return { ...msg, content: stripped }
+    })
   }
 
   // --------------------------------------------------------------------------
@@ -322,18 +418,37 @@ export class OpenAIProvider implements LLMProvider {
       return
     }
 
-    // Content blocks may contain text and/or tool_result blocks
     const textParts: string[] = []
     const toolResults: Array<{ tool_use_id: string; content: string }> = []
+    const mediaAttachments: Array<{ mime: string; data: string }> = []
+
+    const blockTypes = (msg.content as any[]).map((b: any) => b.type)
 
     for (const block of msg.content) {
       if (block.type === 'text') {
         textParts.push(block.text)
+      } else if (block.type === 'image' && (block as any).source?.type === 'base64') {
+        mediaAttachments.push({ mime: (block as any).source.media_type, data: (block as any).source.data })
       } else if (block.type === 'tool_result') {
-        toolResults.push({
-          tool_use_id: block.tool_use_id,
-          content: block.content,
-        })
+        if (Array.isArray(block.content)) {
+          const textFromBlocks: string[] = []
+          for (const b of block.content as any[]) {
+            if (b.type === 'text') {
+              textFromBlocks.push(b.text)
+            } else if (b.type === 'image' && b.source?.type === 'base64') {
+              mediaAttachments.push({ mime: b.source.media_type, data: b.source.data })
+            }
+          }
+          toolResults.push({
+            tool_use_id: block.tool_use_id,
+            content: textFromBlocks.join('\n') || '(media content)',
+          })
+        } else {
+          toolResults.push({
+            tool_use_id: block.tool_use_id,
+            content: block.content,
+          })
+        }
       }
     }
 
@@ -349,6 +464,19 @@ export class OpenAIProvider implements LLMProvider {
     // Text parts become a user message
     if (textParts.length > 0) {
       result.push({ role: 'user', content: textParts.join('\n') })
+    }
+
+    if (mediaAttachments.length > 0) {
+      const userParts: Array<{ type: string; text?: string; image_url?: { url: string; detail?: string } }> = [
+        { type: 'text', text: 'Attached image(s) from tool result:' },
+      ]
+      for (const att of mediaAttachments) {
+        userParts.push({
+          type: 'image_url',
+          image_url: { url: `data:${att.mime};base64,${att.data}` },
+        })
+      }
+      result.push({ role: 'user', content: userParts })
     }
   }
 

@@ -404,6 +404,7 @@ export type {
   SDKPartialMessage,
   SDKSubagentMessage,
   SDKSkillsUpdatedMessage,
+  SDKWarningMessage,
 
   // Tool types
   ToolDefinition,

@@ -422,6 +422,12 @@ export class QueryEngine {
 
               chunks.push(chunk)
 
+              if (chunk.warnings && chunk.warnings.length > 0) {
+                for (const w of chunk.warnings) {
+                  yield { type: 'system', subtype: 'warning', message: w } as any
+                }
+              }
+
               if (chunk.type === 'usage' && chunk.usage) {
                 streamUsage.input_tokens = chunk.usage.input_tokens
                 streamUsage.output_tokens = chunk.usage.output_tokens
@@ -472,6 +478,12 @@ export class QueryEngine {
             undefined,
             this.config.abortSignal,
           )
+
+          if (response.warnings && response.warnings.length > 0) {
+            for (const w of response.warnings) {
+              yield { type: 'system', subtype: 'warning', message: w } as any
+            }
+          }
         }
       } catch (err: any) {
         // Handle prompt-too-long by compacting
@@ -633,7 +645,9 @@ export class QueryEngine {
             output:
               typeof result.content === 'string'
                 ? result.content
-                : JSON.stringify(result.content),
+                : Array.isArray(result.content)
+                  ? (result.content as any[]).map((b: any) => b.type === 'text' ? b.text : `[${b.type}]`).join('\n')
+                  : JSON.stringify(result.content),
           },
         }
       }
@@ -644,10 +658,7 @@ export class QueryEngine {
         content: toolResults.map((r) => ({
           type: 'tool_result' as const,
           tool_use_id: r.tool_use_id,
-          content:
-            typeof r.content === 'string'
-              ? r.content
-              : JSON.stringify(r.content),
+          content: r.content,
           is_error: r.is_error,
         })),
       })
