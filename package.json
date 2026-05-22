@@ -44,6 +44,9 @@
     "zod": "^3.23.0",
     "zod-to-json-schema": "^3.24.0"
   },
+  "optionalDependencies": {
+    "pdfjs-dist": "^4.10.0"
+  },
   "devDependencies": {
     "@types/cross-spawn": "^6.0.6",
     "@types/node": "^22.0.0",
