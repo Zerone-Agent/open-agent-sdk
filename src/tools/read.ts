@@ -92,13 +92,20 @@ interface ExtractPdfResult {
 async function extractPdfText(filePath: string): Promise<ExtractPdfResult> {
   let pdfjs: any
   try {
-    try {
-      pdfjs = await import('pdfjs-dist')
-    } catch {
+    if (typeof window === 'undefined' && typeof document === 'undefined') {
       pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs')
+    } else {
+      pdfjs = await import('pdfjs-dist')
     }
-  } catch (err: any) {
-    throw new Error(`PDF support requires pdfjs-dist. Install it with: npm install pdfjs-dist. Original error: ${err.message}`)
+  } catch {
+    try {
+      pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs')
+    } catch {
+      pdfjs = await import('pdfjs-dist')
+    }
+  }
+  if (!pdfjs) {
+    throw new Error('PDF support requires pdfjs-dist. Install it with: npm install pdfjs-dist')
   }
 
   const data = new Uint8Array(await readFile(filePath))
@@ -109,7 +116,7 @@ async function extractPdfText(filePath: string): Promise<ExtractPdfResult> {
     standardFontDataUrl = dirname(pdfjsPkgPath) + '/standard_fonts/'
   } catch {}
 
-  const doc = await pdfjs.getDocument({ data, standardFontDataUrl }).promise
+  const doc = await pdfjs.getDocument({ data, standardFontDataUrl, useWorkerFetch: false, isEvalSupported: false, useSystemFonts: true }).promise
   const pageCount = doc.numPages
 
   let fullText = `--- PDF: ${filePath} (${pageCount} page${pageCount !== 1 ? 's' : ''}) ---\n\n`
