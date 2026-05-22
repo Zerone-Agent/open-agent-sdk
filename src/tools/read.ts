@@ -18,6 +18,7 @@ const BINARY_EXTENSIONS = new Set([
   'doc', 'docx',
   'xls', 'xlsx',
   'ppt', 'pptx',
+  'pdf',
   'odt', 'ods', 'odp',
   'rtf',
   'exe', 'dll', 'so', 'dylib', 'wasm',
@@ -56,19 +57,10 @@ const EXT_MIME_MAP: Record<string, string> = {
   gif: 'image/gif',
   bmp: 'image/bmp',
   webp: 'image/webp',
-  pdf: 'application/pdf',
 }
 
 function isImageAttachment(mime: string): boolean {
   return mime.startsWith('image/') && mime !== 'image/svg+xml'
-}
-
-function isPdfAttachment(mime: string): boolean {
-  return mime === 'application/pdf'
-}
-
-function isMedia(mime: string): boolean {
-  return isImageAttachment(mime) || isPdfAttachment(mime)
 }
 
 function getExtension(filePath: string): string {
@@ -138,13 +130,12 @@ export const FileReadTool = defineTool({
 
       const mime = sniffMime(sample, fallbackMime)
 
-      if (isMedia(mime)) {
+      if (isImageAttachment(mime)) {
         const buffer = await readFile(filePath)
         const base64 = buffer.toString('base64')
-        const msg = isPdfAttachment(mime) ? 'PDF read successfully' : 'Image read successfully'
         return {
           data: [
-            { type: 'text' as const, text: `[${isPdfAttachment(mime) ? 'PDF' : 'Image'} file: ${filePath} (${fileStat.size} bytes, ${mime})]` },
+            { type: 'text' as const, text: `[Image file: ${filePath} (${fileStat.size} bytes, ${mime})]` },
             { type: 'image' as const, source: { type: 'base64' as const, media_type: mime as any, data: base64 } },
           ],
         }

@@ -119,14 +119,12 @@ async function testLocal() {
   assert(sneakyBlocks.some((b: any) => b.type === 'image'), 'should contain image block')
   console.log(`   PASS: detected as image by magic bytes\n`)
 
-  // 4. PDF → content blocks
+  // 4. PDF → rejected as binary (same as docx/xlsx)
   console.log('4. PDF file (.pdf):')
   const pdfResult = await callRead('hello.pdf')
-  assert(!pdfResult.is_error, 'pdf should not error')
-  assert(Array.isArray(pdfResult.content), 'should return array content')
-  const pdfBlocks = pdfResult.content as any[]
-  assert(pdfBlocks.some((b: any) => b.type === 'image'), 'should contain image block')
-  console.log(`   PASS: ${pdfBlocks[0].text}\n`)
+  assert(pdfResult.is_error, 'pdf should be error')
+  assert((pdfResult.content as string).includes('Cannot read binary file'), 'should reject as binary')
+  console.log(`   PASS: ${pdfResult.content}\n`)
 
   // 5. Binary rejection by extension
   for (const f of ['test.docx', 'test.xlsx', 'test.pptx', 'test.xls', 'test.doc', 'test.ppt']) {
@@ -267,7 +265,6 @@ async function testLLM() {
 
   const tests = [
     { prompt: 'Read the file red-pixel.png using the Read tool and describe what you see. Be brief.', label: 'PNG → LLM' },
-    { prompt: 'Read the file hello.pdf using the Read tool and describe what is in it. Be brief.', label: 'PDF → LLM' },
     { prompt: 'Try to read the file test.docx using the Read tool. What error do you get?', label: 'Binary rejection → LLM' },
   ]
 
