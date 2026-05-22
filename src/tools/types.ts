@@ -11,7 +11,7 @@ export function defineTool(config: {
   name: string
   description: string
   inputSchema: ToolInputSchema
-  call: (input: any, context: ToolContext) => Promise<string | { data: string; is_error?: boolean }>
+  call: (input: any, context: ToolContext) => Promise<string | { data: string | any[]; is_error?: boolean }>
   isReadOnly?: boolean
   isConcurrencySafe?: boolean
   prompt?: string | ((context: ToolContext) => Promise<string>)
@@ -29,12 +29,14 @@ export function defineTool(config: {
     async call(input: any, context: ToolContext): Promise<ToolResult> {
       try {
         const result = await config.call(input, context)
-        const output = typeof result === 'string' ? result : result.data
         const isError = typeof result === 'object' && result.is_error
+        if (typeof result === 'string') {
+          return { type: 'tool_result', tool_use_id: '', content: result, is_error: false }
+        }
         return {
           type: 'tool_result',
-          tool_use_id: '', // filled by engine
-          content: output,
+          tool_use_id: '',
+          content: result.data,
           is_error: isError || false,
         }
       } catch (err: any) {

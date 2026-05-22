@@ -58,7 +58,7 @@ async function* parseSSEStream(response: Response): AsyncGenerator<any> {
 
 interface OpenAIChatMessage {
   role: 'system' | 'user' | 'assistant' | 'tool'
-  content?: string | null
+  content?: string | null | Array<{ type: string; text?: string; image_url?: { url: string; detail?: string } }>
   reasoning_content?: string | null
   reasoning?: string | null
   tool_calls?: OpenAIToolCall[]
@@ -325,15 +325,32 @@ export class OpenAIProvider implements LLMProvider {
     // Content blocks may contain text and/or tool_result blocks
     const textParts: string[] = []
     const toolResults: Array<{ tool_use_id: string; content: string }> = []
+    const mediaAttachments: Array<{ mime: string; data: string }> = []
 
     for (const block of msg.content) {
       if (block.type === 'text') {
         textParts.push(block.text)
       } else if (block.type === 'tool_result') {
-        toolResults.push({
-          tool_use_id: block.tool_use_id,
-          content: block.content,
-        })
+        if (Array.isArray(block.content)) {
+          // Extract text parts and media from array content
+          const textFromBlocks: string[] = []
+          for (const b of block.content as any[]) {
+            if (b.type === 'text') {
+              textFromBlocks.push(b.text)
+            } else if (b.type === 'image' && b.source?.type === 'base64') {
+              mediaAttachments.push({ mime: b.source.media_type, data: b.source.data })
+            }
+          }
+          toolResults.push({
+            tool_use_id: block.tool_use_id,
+            content: textFromBlocks.join('\n') || '(media content)',
+          })
+        } else {
+          toolResults.push({
+            tool_use_id: block.tool_use_id,
+            content: block.content,
+          })
+        }
       }
     }
 
@@ -349,6 +366,21 @@ export class OpenAIProvider implements LLMProvider {
     // Text parts become a user message
     if (textParts.length > 0) {
       result.push({ role: 'user', content: textParts.join('\n') })
+    }
+
+    // Inject synthetic user message with media attachments
+    // OpenAI tool messages only accept text, so media must be sent as user message
+    if (mediaAttachments.length > 0) {
+      const userParts: Array<{ type: string; text?: string; image_url?: { url: string; detail?: string } }> = [
+        { type: 'text', text: 'Attached image(s) from tool result:' },
+      ]
+      for (const att of mediaAttachments) {
+        userParts.push({
+          type: 'image_url',
+          image_url: { url: `data:${att.mime};base64,${att.data}` },
+        })
+      }
+      result.push({ role: 'user', content: userParts })
     }
   }
 

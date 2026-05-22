@@ -1,10 +1,95 @@
 /**
  * FileReadTool - Read file contents with line numbers
+ *
+ * Handles three paths:
+ * 1. Image/PDF → base64 attachment (data URI)
+ * 2. Binary → rejection error
+ * 3. Text → line-numbered content
  */
 
 import { readFile, stat } from 'fs/promises'
-import { resolve } from 'path'
+import { resolve, extname } from 'path'
 import { defineTool } from './types.js'
+
+const SAMPLE_BYTES = 4096
+const NON_PRINTABLE_THRESHOLD = 0.3
+
+const BINARY_EXTENSIONS = new Set([
+  'doc', 'docx',
+  'xls', 'xlsx',
+  'ppt', 'pptx',
+  'odt', 'ods', 'odp',
+  'rtf',
+  'exe', 'dll', 'so', 'dylib', 'wasm',
+  'zip', 'tar', 'gz', 'bz2', 'xz', '7z', 'rar',
+  'jar', 'war', 'class',
+  'woff', 'woff2', 'ttf', 'eot', 'otf',
+  'mp3', 'mp4', 'avi', 'mov', 'mkv', 'flac', 'wav', 'wmv',
+  'sqlite', 'db',
+  'bin', 'dat', 'obj', 'o', 'a', 'lib',
+  'pyc', 'pyo',
+])
+
+function startsWith(bytes: Buffer, prefix: number[]): boolean {
+  if (bytes.length < prefix.length) return false
+  return prefix.every((v, i) => bytes[i] === v)
+}
+
+function sniffMime(bytes: Buffer, fallback: string): string {
+  if (startsWith(bytes, [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])) return 'image/png'
+  if (startsWith(bytes, [0xff, 0xd8, 0xff])) return 'image/jpeg'
+  if (startsWith(bytes, [0x47, 0x49, 0x46, 0x38])) return 'image/gif'
+  if (startsWith(bytes, [0x42, 0x4d])) return 'image/bmp'
+  if (startsWith(bytes, [0x25, 0x50, 0x44, 0x46, 0x2d])) return 'application/pdf'
+  if (startsWith(bytes, [0x52, 0x49, 0x46, 0x46]) &&
+      bytes.length >= 12 &&
+      startsWith(bytes.subarray(8), [0x57, 0x45, 0x42, 0x50])) {
+    return 'image/webp'
+  }
+  return fallback
+}
+
+const EXT_MIME_MAP: Record<string, string> = {
+  png: 'image/png',
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
+  gif: 'image/gif',
+  bmp: 'image/bmp',
+  webp: 'image/webp',
+  pdf: 'application/pdf',
+}
+
+function isImageAttachment(mime: string): boolean {
+  return mime.startsWith('image/') && mime !== 'image/svg+xml'
+}
+
+function isPdfAttachment(mime: string): boolean {
+  return mime === 'application/pdf'
+}
+
+function isMedia(mime: string): boolean {
+  return isImageAttachment(mime) || isPdfAttachment(mime)
+}
+
+function getExtension(filePath: string): string {
+  return extname(filePath).slice(1).toLowerCase()
+}
+
+function isBinaryByExtension(filePath: string): boolean {
+  return BINARY_EXTENSIONS.has(getExtension(filePath))
+}
+
+function isBinaryByContent(bytes: Buffer): boolean {
+  if (bytes.length === 0) return false
+  let nonPrintable = 0
+  for (let i = 0; i < bytes.length; i++) {
+    if (bytes[i] === 0) return true
+    if (bytes[i] < 9 || (bytes[i] > 13 && bytes[i] < 32)) {
+      nonPrintable++
+    }
+  }
+  return nonPrintable / bytes.length > NON_PRINTABLE_THRESHOLD
+}
 
 export const FileReadTool = defineTool({
   name: 'Read',
@@ -38,10 +123,35 @@ export const FileReadTool = defineTool({
         return { data: `Error: ${filePath} is a directory, not a file. Use Bash with 'ls' to list directory contents.`, is_error: true }
       }
 
-      // Check for binary/image files
-      const ext = filePath.split('.').pop()?.toLowerCase()
-      if (['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'svg'].includes(ext || '')) {
-        return `[Image file: ${filePath} (${fileStat.size} bytes)]`
+      const ext = getExtension(filePath)
+      const fallbackMime = EXT_MIME_MAP[ext] || ''
+
+      let sample: Buffer
+      try {
+        const handle = await import('fs/promises').then(m => m.open(filePath, 'r'))
+        sample = Buffer.alloc(Math.min(SAMPLE_BYTES, fileStat.size))
+        await handle.read(sample, 0, sample.length, 0)
+        await handle.close()
+      } catch {
+        sample = Buffer.alloc(0)
+      }
+
+      const mime = sniffMime(sample, fallbackMime)
+
+      if (isMedia(mime)) {
+        const buffer = await readFile(filePath)
+        const base64 = buffer.toString('base64')
+        const msg = isPdfAttachment(mime) ? 'PDF read successfully' : 'Image read successfully'
+        return {
+          data: [
+            { type: 'text' as const, text: `[${isPdfAttachment(mime) ? 'PDF' : 'Image'} file: ${filePath} (${fileStat.size} bytes, ${mime})]` },
+            { type: 'image' as const, source: { type: 'base64' as const, media_type: mime as any, data: base64 } },
+          ],
+        }
+      }
+
+      if (isBinaryByExtension(filePath) || isBinaryByContent(sample)) {
+        return { data: `Cannot read binary file: ${filePath}`, is_error: true }
       }
 
       const content = await readFile(filePath, 'utf-8')
@@ -51,7 +161,6 @@ export const FileReadTool = defineTool({
       const limit = input.limit || 2000
       const selectedLines = lines.slice(offset, offset + limit)
 
-      // Format with line numbers (cat -n style)
       const numbered = selectedLines.map((line: string, i: number) => {
         const lineNum = offset + i + 1
         return `${lineNum}\t${line}`
