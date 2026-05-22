@@ -40,8 +40,8 @@ async function testLocal() {
   // Text file
   writeFileSync(resolve(TMP_DIR, 'test.txt'), 'hello world\nline 2\nline 3')
 
-  // Real 1x1 red pixel PNG (correct magic bytes)
-  writeFileSync(resolve(TMP_DIR, 'red-pixel.png'), Buffer.from(
+  // Real 1x1 pixel PNG (yellow, RGBA)
+  writeFileSync(resolve(TMP_DIR, 'sample-icon.png'), Buffer.from(
     'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAHggJ/PchI7wAAAABJRU5ErkJggg==',
     'base64',
   ))
@@ -100,7 +100,7 @@ async function testLocal() {
 
   // 2. PNG image → content blocks
   console.log('2. PNG image (.png):')
-  const imgResult = await callRead('red-pixel.png')
+  const imgResult = await callRead('sample-icon.png')
   assert(!imgResult.is_error, 'image should not error')
   assert(Array.isArray(imgResult.content), 'should return array content')
   const imgBlocks = imgResult.content as any[]
@@ -183,7 +183,7 @@ async function testOpenAIConversion() {
       {
         role: 'assistant',
         content: [
-          { type: 'tool_use', id: 'tu_1', name: 'Read', input: { file_path: 'red-pixel.png' } },
+          { type: 'tool_use', id: 'tu_1', name: 'Read', input: { file_path: 'sample-icon.png' } },
         ],
       },
       // User sends back tool result with image
@@ -194,7 +194,7 @@ async function testOpenAIConversion() {
             type: 'tool_result',
             tool_use_id: 'tu_1',
             content: [
-              { type: 'text', text: '[Image file: red-pixel.png (70 bytes, image/png)]' },
+              { type: 'text', text: '[Image file: sample-icon.png (70 bytes, image/png)]' },
               { type: 'image', source: { type: 'base64', media_type: 'image/png', data: 'iVBOR...' } },
             ],
           },
@@ -264,7 +264,7 @@ async function testLLM() {
   }
 
   const tests = [
-    { prompt: 'Read the file red-pixel.png using the Read tool and describe what you see. Be brief.', label: 'PNG → LLM' },
+    { prompt: 'Read the file sample-icon.png using the Read tool and describe what you see. Be brief.', label: 'PNG → LLM' },
     { prompt: 'Try to read the file test.docx using the Read tool. What error do you get?', label: 'Binary rejection → LLM' },
   ]
 
