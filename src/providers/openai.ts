@@ -351,7 +351,10 @@ export class OpenAIProvider implements LLMProvider {
   private isImageNotSupportedError(status: number, body: string): boolean {
     if (status !== 404 && status !== 400) return false
     const lower = body.toLowerCase()
-    return lower.includes('image') && (lower.includes('not support') || lower.includes('no endpoint'))
+    if (lower.includes('image') && (lower.includes('not support') || lower.includes('no endpoint'))) return true
+    if (lower.includes('unknown variant') && lower.includes('image_url')) return true
+    if (lower.includes('image') && lower.includes('not supported')) return true
+    return false
   }
 
   private hasImageContent(messages: OpenAIChatMessage[]): boolean {
