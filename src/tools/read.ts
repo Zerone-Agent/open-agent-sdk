@@ -90,78 +90,77 @@ interface ExtractPdfResult {
 }
 
 async function extractPdfText(filePath: string): Promise<ExtractPdfResult> {
+  let pdfjs: any
   try {
-    const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs')
-
-    let standardFontDataUrl: string | undefined
     try {
-      const pdfjsPkgPath = require.resolve('pdfjs-dist/package.json')
-      standardFontDataUrl = dirname(pdfjsPkgPath) + '/standard_fonts/'
-    } catch {}
-
-    const data = new Uint8Array(await readFile(filePath))
-    const doc = await pdfjs.getDocument({ data, standardFontDataUrl }).promise
-    const pageCount = doc.numPages
-
-    let fullText = `--- PDF: ${filePath} (${pageCount} page${pageCount !== 1 ? 's' : ''}) ---\n\n`
-
-    // 提取每页文本
-    for (let i = 1; i <= pageCount; i++) {
-      const page = await doc.getPage(i)
-      const content = await page.getTextContent()
-      const pageText = content.items
-        .map((item: any) => item.str)
-        .join('')
-        .trim()
-
-      fullText += `=== Page ${i} ===\n${pageText}\n\n`
-      page.cleanup()
+      pdfjs = await import('pdfjs-dist')
+    } catch {
+      pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs')
     }
+  } catch (err: any) {
+    throw new Error(`PDF support requires pdfjs-dist. Install it with: npm install pdfjs-dist. Original error: ${err.message}`)
+  }
 
-    // 提取表单字段 (AcroForm)
-    let fieldCount = 0
-    try {
-      const fieldObjects = await doc.getFieldObjects()
-      if (fieldObjects && Object.keys(fieldObjects).length > 0) {
-        const formFields: Record<string, string> = {}
-        for (const [name, field] of Object.entries(fieldObjects)) {
-          if (Array.isArray(field)) {
-            const values = field
-              .map((f: any) => f.value)
-              .filter((v: any) => v !== undefined && v !== null && v !== '')
-            if (values.length > 0) {
-              formFields[name] = values.join(', ')
-            }
-          } else {
-            const value = (field as any)?.value
-            if (value !== undefined && value !== null && value !== '') {
-              formFields[name] = String(value)
-            }
-          }
-        }
+  const data = new Uint8Array(await readFile(filePath))
 
-        if (Object.keys(formFields).length > 0) {
-          fieldCount = Object.keys(formFields).length
-          fullText += `=== Form Fields (${fieldCount}) ===\n`
-          for (const [name, value] of Object.entries(formFields)) {
-            fullText += `${name}: ${value}\n`
+  let standardFontDataUrl: string | undefined
+  try {
+    const pdfjsPkgPath = require.resolve('pdfjs-dist/package.json')
+    standardFontDataUrl = dirname(pdfjsPkgPath) + '/standard_fonts/'
+  } catch {}
+
+  const doc = await pdfjs.getDocument({ data, standardFontDataUrl }).promise
+  const pageCount = doc.numPages
+
+  let fullText = `--- PDF: ${filePath} (${pageCount} page${pageCount !== 1 ? 's' : ''}) ---\n\n`
+
+  for (let i = 1; i <= pageCount; i++) {
+    const page = await doc.getPage(i)
+    const content = await page.getTextContent()
+    const pageText = content.items
+      .map((item: any) => item.str)
+      .join('')
+      .trim()
+
+    fullText += `=== Page ${i} ===\n${pageText}\n\n`
+    page.cleanup()
+  }
+
+  let fieldCount = 0
+  try {
+    const fieldObjects = await doc.getFieldObjects()
+    if (fieldObjects && Object.keys(fieldObjects).length > 0) {
+      const formFields: Record<string, string> = {}
+      for (const [name, field] of Object.entries(fieldObjects)) {
+        if (Array.isArray(field)) {
+          const values = field
+            .map((f: any) => f.value)
+            .filter((v: any) => v !== undefined && v !== null && v !== '')
+          if (values.length > 0) {
+            formFields[name] = values.join(', ')
           }
-          fullText += '\n'
+        } else {
+          const value = (field as any)?.value
+          if (value !== undefined && value !== null && value !== '') {
+            formFields[name] = String(value)
+          }
         }
       }
-    } catch {
-      // 忽略表单提取错误 (不是所有 PDF 都有表单)
-    }
 
-    await doc.destroy()
-
-    return { text: fullText.trimEnd(), pageCount, fieldCount }
-  } catch (err: any) {
-    if (err.message?.includes('password')) {
-      throw new Error('Encrypted PDF not supported')
+      if (Object.keys(formFields).length > 0) {
+        fieldCount = Object.keys(formFields).length
+        fullText += `=== Form Fields (${fieldCount}) ===\n`
+        for (const [name, value] of Object.entries(formFields)) {
+          fullText += `${name}: ${value}\n`
+        }
+        fullText += '\n'
+      }
     }
-    throw new Error(`Failed to parse PDF: ${err.message}`)
-  }
+  } catch {}
+
+  await doc.destroy()
+
+  return { text: fullText.trimEnd(), pageCount, fieldCount }
 }
 
 export const FileReadTool = defineTool({
@@ -242,12 +241,6 @@ export const FileReadTool = defineTool({
 
           return result || '(empty PDF)'
         } catch (err: any) {
-          if (err.message?.includes('Cannot find module') || err.message?.includes('pdfjs-dist')) {
-            return {
-              data: `Error: PDF support requires pdfjs-dist. Install it with: npm install pdfjs-dist`,
-              is_error: true,
-            }
-          }
           return {
             data: `Error: ${err.message}`,
             is_error: true,
