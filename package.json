@@ -44,12 +44,18 @@
     "zod": "^3.23.0",
     "zod-to-json-schema": "^3.24.0"
   },
-  "optionalDependencies": {
+  "peerDependencies": {
     "pdfjs-dist": "^4.10.0"
+  },
+  "peerDependenciesMeta": {
+    "pdfjs-dist": {
+      "optional": true
+    }
   },
   "devDependencies": {
     "@types/cross-spawn": "^6.0.6",
     "@types/node": "^22.0.0",
+    "pdfjs-dist": "^5.7.284",
     "tsx": "^4.19.0",
     "typescript": "^5.7.0",
     "vitest": "^4.1.4"
