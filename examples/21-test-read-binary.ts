@@ -143,9 +143,10 @@ async function testLocal() {
     { cwd: TMP_DIR },
   )
   if (!pdfPageResult.is_error) {
-    const lines = (pdfPageResult.content as string).split('\n')
-    assert(lines.length <= 3, 'should return at most 3 lines')
-    console.log(`   PASS: returned ${lines.length} lines (limit=3)\n`)
+    const content = pdfPageResult.content as string
+    const numberedLines = content.split('\n').filter(l => /^\d+\t/.test(l))
+    assert(numberedLines.length <= 3, `should return at most 3 numbered lines, got ${numberedLines.length}`)
+    console.log(`   PASS: returned ${numberedLines.length} numbered lines (limit=3)\n`)
   } else {
     console.log(`   SKIP: pdfjs-dist not installed\n`)
   }

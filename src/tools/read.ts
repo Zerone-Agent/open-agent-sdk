@@ -90,13 +90,9 @@ interface ExtractPdfResult {
 
 async function extractPdfText(filePath: string): Promise<ExtractPdfResult> {
   try {
-    const pdfjs = await import('pdfjs-dist')
-    // 禁用 worker, 单线程提取 (桌面环境足够)
-    if ((pdfjs as any).GlobalWorkerOptions) {
-      (pdfjs as any).GlobalWorkerOptions.workerSrc = ''
-    }
+    const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs')
 
-    const data = await readFile(filePath)
+    const data = new Uint8Array(await readFile(filePath))
     const doc = await pdfjs.getDocument({ data }).promise
     const pageCount = doc.numPages
 
