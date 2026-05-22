@@ -116,7 +116,7 @@ async function extractPdfText(filePath: string): Promise<ExtractPdfResult> {
     standardFontDataUrl = dirname(pdfjsPkgPath) + '/standard_fonts/'
   } catch {}
 
-  const doc = await pdfjs.getDocument({ data, standardFontDataUrl, useWorkerFetch: false, isEvalSupported: false, useSystemFonts: true }).promise
+  const doc = await pdfjs.getDocument({ data, standardFontDataUrl, disableWorker: true }).promise
   const pageCount = doc.numPages
 
   let fullText = `--- PDF: ${filePath} (${pageCount} page${pageCount !== 1 ? 's' : ''}) ---\n\n`
