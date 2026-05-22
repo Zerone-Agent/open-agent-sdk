@@ -422,6 +422,12 @@ export class QueryEngine {
 
               chunks.push(chunk)
 
+              if (chunk.warnings && chunk.warnings.length > 0) {
+                for (const w of chunk.warnings) {
+                  yield { type: 'system', subtype: 'warning', message: w } as any
+                }
+              }
+
               if (chunk.type === 'usage' && chunk.usage) {
                 streamUsage.input_tokens = chunk.usage.input_tokens
                 streamUsage.output_tokens = chunk.usage.output_tokens

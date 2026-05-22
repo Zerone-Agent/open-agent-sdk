@@ -63,6 +63,7 @@ export type SDKMessage =
   | SDKRateLimitEvent
   | SDKSubagentMessage
   | SDKSkillsUpdatedMessage
+  | SDKWarningMessage
 
 export interface SDKAssistantMessage {
   type: 'assistant'
@@ -143,6 +144,13 @@ export interface SDKCompactBoundaryMessage {
   type: 'system'
   subtype: 'compact_boundary'
   summary?: string
+}
+
+/** Non-fatal warning during agent execution (e.g. images stripped because model doesn't support them). */
+export interface SDKWarningMessage {
+  type: 'system'
+  subtype: 'warning'
+  message: string
 }
 
 /** Streaming events emitted during auto-compaction. */

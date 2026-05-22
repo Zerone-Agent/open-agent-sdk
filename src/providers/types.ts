@@ -82,6 +82,7 @@ export interface StreamChunk {
   delta?: string
   name?: string
   input?: string
+  warnings?: string[]
   usage?: {
     input_tokens: number
     output_tokens: number
