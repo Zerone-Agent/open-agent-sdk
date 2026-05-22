@@ -418,10 +418,11 @@ export class OpenAIProvider implements LLMProvider {
       return
     }
 
-    // Content blocks may contain text and/or tool_result blocks
     const textParts: string[] = []
     const toolResults: Array<{ tool_use_id: string; content: string }> = []
     const mediaAttachments: Array<{ mime: string; data: string }> = []
+
+    const blockTypes = (msg.content as any[]).map((b: any) => b.type)
 
     for (const block of msg.content) {
       if (block.type === 'text') {
@@ -465,8 +466,6 @@ export class OpenAIProvider implements LLMProvider {
       result.push({ role: 'user', content: textParts.join('\n') })
     }
 
-    // Inject synthetic user message with media attachments
-    // OpenAI tool messages only accept text, so media must be sent as user message
     if (mediaAttachments.length > 0) {
       const userParts: Array<{ type: string; text?: string; image_url?: { url: string; detail?: string } }> = [
         { type: 'text', text: 'Attached image(s) from tool result:' },
