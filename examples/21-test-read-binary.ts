@@ -5,10 +5,12 @@
  * 1. Sniffs MIME by magic bytes (not just extension)
  * 2. Rejects binary Office files
  * 3. Returns image content blocks for images
- * 4. Returns content blocks for PDFs
+ * 4. Extracts text from PDFs (via pdfjs-dist)
  * 5. Detects binary by null-byte / non-printable ratio
  * 6. Reads text files normally
  * 7. [Optional] Sends image/PDF to LLM and verifies interpretation
+ *
+ * PDF tests require pdfjs-dist: npm install pdfjs-dist
  *
  * Run (local tests only):
  *   npx tsx examples/21-test-read-binary.ts
@@ -119,12 +121,42 @@ async function testLocal() {
   assert(sneakyBlocks.some((b: any) => b.type === 'image'), 'should contain image block')
   console.log(`   PASS: detected as image by magic bytes\n`)
 
-  // 4. PDF → rejected as binary (same as docx/xlsx)
-  console.log('4. PDF file (.pdf):')
+  // 4. PDF → extracted as text (requires pdfjs-dist)
+  console.log('4. PDF file (.pdf) — text extraction:')
   const pdfResult = await callRead('hello.pdf')
-  assert(pdfResult.is_error, 'pdf should be error')
-  assert((pdfResult.content as string).includes('Cannot read binary file'), 'should reject as binary')
-  console.log(`   PASS: ${pdfResult.content}\n`)
+  if (pdfResult.is_error && (pdfResult.content as string).includes('pdfjs-dist')) {
+    console.log(`   SKIP: pdfjs-dist not installed (${pdfResult.content})\n`)
+  } else {
+    assert(!pdfResult.is_error, 'pdf should not error when pdfjs-dist is installed')
+    const pdfText = pdfResult.content as string
+    assert(pdfText.includes('=== Page 1 ==='), 'should contain page marker')
+    assert(pdfText.includes('--- PDF:'), 'should contain PDF header')
+    assert(pdfText.includes('page'), 'should contain page count')
+    console.log(`   PASS: PDF text extracted`)
+    console.log(`   Preview: ${pdfText.split('\n').slice(0, 5).join(' | ')}\n`)
+  }
+
+  // 4b. PDF with offset/limit
+  console.log('4b. PDF with offset/limit:')
+  const pdfPageResult = await FileReadTool.call(
+    { file_path: 'hello.pdf', offset: 0, limit: 3 },
+    { cwd: TMP_DIR },
+  )
+  if (!pdfPageResult.is_error) {
+    const content = pdfPageResult.content as string
+    const numberedLines = content.split('\n').filter(l => /^\d+\t/.test(l))
+    assert(numberedLines.length <= 3, `should return at most 3 numbered lines, got ${numberedLines.length}`)
+    console.log(`   PASS: returned ${numberedLines.length} numbered lines (limit=3)\n`)
+  } else {
+    console.log(`   SKIP: pdfjs-dist not installed\n`)
+  }
+
+  // 4c. PDF file not found
+  console.log('4c. PDF file not found:')
+  const pdfNoExist = await callRead('nonexistent.pdf')
+  assert(pdfNoExist.is_error, 'should error on missing PDF')
+  assert((pdfNoExist.content as string).includes('File not found'), 'should say File not found')
+  console.log(`   PASS\n`)
 
   // 5. Binary rejection by extension
   for (const f of ['test.docx', 'test.xlsx', 'test.pptx', 'test.xls', 'test.doc', 'test.ppt']) {

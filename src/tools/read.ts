@@ -8,7 +8,8 @@
  */
 
 import { readFile, stat } from 'fs/promises'
-import { resolve, extname } from 'path'
+import { resolve, extname, dirname } from 'path'
+import { fileURLToPath } from 'url'
 import { defineTool } from './types.js'
 
 const SAMPLE_BYTES = 4096
@@ -18,7 +19,6 @@ const BINARY_EXTENSIONS = new Set([
   'doc', 'docx',
   'xls', 'xlsx',
   'ppt', 'pptx',
-  'pdf',
   'odt', 'ods', 'odp',
   'rtf',
   'exe', 'dll', 'so', 'dylib', 'wasm',
@@ -83,6 +83,105 @@ function isBinaryByContent(bytes: Buffer): boolean {
   return nonPrintable / bytes.length > NON_PRINTABLE_THRESHOLD
 }
 
+interface ExtractPdfResult {
+  text: string
+  pageCount: number
+  fieldCount: number
+}
+
+async function extractPdfText(filePath: string): Promise<ExtractPdfResult> {
+  let pdfjs: any
+  try {
+    if (typeof window === 'undefined' && typeof document === 'undefined') {
+      pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs')
+    } else {
+      pdfjs = await import('pdfjs-dist')
+    }
+  } catch {
+    try {
+      pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs')
+    } catch {
+      pdfjs = await import('pdfjs-dist')
+    }
+  }
+  if (!pdfjs) {
+    throw new Error('PDF support requires pdfjs-dist. Install it with: npm install pdfjs-dist')
+  }
+
+  const data = new Uint8Array(await readFile(filePath))
+
+  let standardFontDataUrl: string | undefined
+  try {
+    const pdfjsPkgPath = require.resolve('pdfjs-dist/package.json')
+    standardFontDataUrl = dirname(pdfjsPkgPath) + '/standard_fonts/'
+  } catch {}
+
+  const doc = await pdfjs.getDocument({ data, standardFontDataUrl, disableWorker: true }).promise
+  const pageCount = doc.numPages
+
+  let fullText = `--- PDF: ${filePath} (${pageCount} page${pageCount !== 1 ? 's' : ''}) ---\n\n`
+
+  for (let i = 1; i <= pageCount; i++) {
+    const page = await doc.getPage(i)
+    const content = await page.getTextContent()
+
+    const lines: string[] = []
+    let lastY: number | null = null
+    let currentLine = ''
+    for (const item of content.items) {
+      if (!(item as any).str) continue
+      const y = (item as any).transform?.[5]
+      if (lastY !== null && y !== null && Math.abs(y - lastY) > 2) {
+        if (currentLine.trim()) lines.push(currentLine.trim())
+        currentLine = ''
+      }
+      currentLine += (item as any).str
+      lastY = y ?? lastY
+    }
+    if (currentLine.trim()) lines.push(currentLine.trim())
+    const pageText = lines.join('\n')
+
+    fullText += `=== Page ${i} ===\n${pageText}\n\n`
+    page.cleanup()
+  }
+
+  let fieldCount = 0
+  try {
+    const fieldObjects = await doc.getFieldObjects()
+    if (fieldObjects && Object.keys(fieldObjects).length > 0) {
+      const formFields: Record<string, string> = {}
+      for (const [name, field] of Object.entries(fieldObjects)) {
+        if (Array.isArray(field)) {
+          const values = field
+            .map((f: any) => f.value)
+            .filter((v: any) => v !== undefined && v !== null && v !== '')
+          if (values.length > 0) {
+            formFields[name] = values.join(', ')
+          }
+        } else {
+          const value = (field as any)?.value
+          if (value !== undefined && value !== null && value !== '') {
+            formFields[name] = String(value)
+          }
+        }
+      }
+
+      if (Object.keys(formFields).length > 0) {
+        fieldCount = Object.keys(formFields).length
+        fullText += `=== Form Fields (${fieldCount}) ===\n`
+        for (const [name, value] of Object.entries(formFields)) {
+          fullText += `${name}: ${value}\n`
+        }
+        fullText += '\n'
+      }
+    }
+  } catch {}
+
+  await doc.destroy()
+
+  return { text: fullText.trimEnd(), pageCount, fieldCount }
+}
+
 export const FileReadTool = defineTool({
   name: 'Read',
   description: 'Read a file from the filesystem. Returns content with line numbers. Supports text files, images (returns visual content), and PDFs.',
@@ -138,6 +237,33 @@ export const FileReadTool = defineTool({
             { type: 'text' as const, text: `[Image file: ${filePath} (${fileStat.size} bytes, ${mime})]` },
             { type: 'image' as const, source: { type: 'base64' as const, media_type: mime as any, data: base64 } },
           ],
+        }
+      }
+
+      if (mime === 'application/pdf') {
+        try {
+          const { text } = await extractPdfText(filePath)
+          const lines = text.split('\n')
+          const offset = input.offset || 0
+          const limit = input.limit || 2000
+          const selectedLines = lines.slice(offset, offset + limit)
+
+          const numbered = selectedLines.map((line: string, i: number) => {
+            const lineNum = offset + i + 1
+            return `${lineNum}\t${line}`
+          }).join('\n')
+
+          let result = numbered
+          if (lines.length > offset + limit) {
+            result += `\n\n(${lines.length - offset - limit} more lines not shown)`
+          }
+
+          return result || '(empty PDF)'
+        } catch (err: any) {
+          return {
+            data: `Error: ${err.message}`,
+            is_error: true,
+          }
         }
       }
 

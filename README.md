@@ -413,7 +413,7 @@ npx tsx examples/web/server.ts
 | Tool                                       | Description                                  |
 | ------------------------------------------ | -------------------------------------------- |
 | **Bash**                                   | Execute shell commands                       |
-| **Read**                                   | Read files with line numbers                 |
+| **Read**                                   | Read files with line numbers (text, images, PDFs) |
 | **Write**                                  | Create / overwrite files                     |
 | **Edit**                                   | Precise string replacement in files          |
 | **Glob**                                   | Find files by pattern                        |
@@ -436,6 +436,28 @@ npx tsx examples/web/server.ts
 | **LSP**                                    | Language Server Protocol (code intelligence) |
 | **Config**                                 | Dynamic configuration                        |
 | **TodoWrite**                              | Session todo list                            |
+
+### PDF Support
+
+The Read tool supports extracting text content from PDF files:
+
+```typescript
+const agent = createAgent({ allowedTools: ['Read'] })
+const result = await agent.prompt('Read /path/to/document.pdf and summarize it')
+console.log(result.text)
+```
+
+**Requirements:** Install `pdfjs-dist` for PDF support:
+
+```bash
+npm install pdfjs-dist
+```
+
+**Features:**
+
+- Extracts text from each page with page markers
+- Extracts AcroForm field values
+- Works with `offset` and `limit` parameters like text files
 
 ## Architecture
 
