@@ -83,6 +83,85 @@ function isBinaryByContent(bytes: Buffer): boolean {
   return nonPrintable / bytes.length > NON_PRINTABLE_THRESHOLD
 }
 
+interface ExtractPdfResult {
+  text: string
+  pageCount: number
+  fieldCount: number
+}
+
+async function extractPdfText(filePath: string): Promise<ExtractPdfResult> {
+  try {
+    const pdfjs = await import('pdfjs-dist')
+    // 禁用 worker, 单线程提取 (桌面环境足够)
+    if ((pdfjs as any).GlobalWorkerOptions) {
+      (pdfjs as any).GlobalWorkerOptions.workerSrc = ''
+    }
+
+    const data = await readFile(filePath)
+    const doc = await pdfjs.getDocument({ data }).promise
+    const pageCount = doc.numPages
+
+    let fullText = `--- PDF: ${filePath} (${pageCount} page${pageCount !== 1 ? 's' : ''}) ---\n\n`
+
+    // 提取每页文本
+    for (let i = 1; i <= pageCount; i++) {
+      const page = await doc.getPage(i)
+      const content = await page.getTextContent()
+      const pageText = content.items
+        .map((item: any) => item.str)
+        .join('')
+        .trim()
+
+      fullText += `=== Page ${i} ===\n${pageText}\n\n`
+      page.cleanup()
+    }
+
+    // 提取表单字段 (AcroForm)
+    let fieldCount = 0
+    try {
+      const fieldObjects = await doc.getFieldObjects()
+      if (fieldObjects && Object.keys(fieldObjects).length > 0) {
+        const formFields: Record<string, string> = {}
+        for (const [name, field] of Object.entries(fieldObjects)) {
+          if (Array.isArray(field)) {
+            const values = field
+              .map((f: any) => f.value)
+              .filter((v: any) => v !== undefined && v !== null && v !== '')
+            if (values.length > 0) {
+              formFields[name] = values.join(', ')
+            }
+          } else {
+            const value = (field as any)?.value
+            if (value !== undefined && value !== null && value !== '') {
+              formFields[name] = String(value)
+            }
+          }
+        }
+
+        if (Object.keys(formFields).length > 0) {
+          fieldCount = Object.keys(formFields).length
+          fullText += `=== Form Fields (${fieldCount}) ===\n`
+          for (const [name, value] of Object.entries(formFields)) {
+            fullText += `${name}: ${value}\n`
+          }
+          fullText += '\n'
+        }
+      }
+    } catch {
+      // 忽略表单提取错误 (不是所有 PDF 都有表单)
+    }
+
+    await doc.destroy()
+
+    return { text: fullText.trimEnd(), pageCount, fieldCount }
+  } catch (err: any) {
+    if (err.message?.includes('password')) {
+      throw new Error('Encrypted PDF not supported')
+    }
+    throw new Error(`Failed to parse PDF: ${err.message}`)
+  }
+}
+
 export const FileReadTool = defineTool({
   name: 'Read',
   description: 'Read a file from the filesystem. Returns content with line numbers. Supports text files, images (returns visual content), and PDFs.',
