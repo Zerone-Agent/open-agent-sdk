@@ -18,7 +18,6 @@ const BINARY_EXTENSIONS = new Set([
   'doc', 'docx',
   'xls', 'xlsx',
   'ppt', 'pptx',
-  'pdf',
   'odt', 'ods', 'odp',
   'rtf',
   'exe', 'dll', 'so', 'dylib', 'wasm',
@@ -217,6 +216,39 @@ export const FileReadTool = defineTool({
             { type: 'text' as const, text: `[Image file: ${filePath} (${fileStat.size} bytes, ${mime})]` },
             { type: 'image' as const, source: { type: 'base64' as const, media_type: mime as any, data: base64 } },
           ],
+        }
+      }
+
+      if (mime === 'application/pdf') {
+        try {
+          const { text } = await extractPdfText(filePath)
+          const lines = text.split('\n')
+          const offset = input.offset || 0
+          const limit = input.limit || 2000
+          const selectedLines = lines.slice(offset, offset + limit)
+
+          const numbered = selectedLines.map((line: string, i: number) => {
+            const lineNum = offset + i + 1
+            return `${lineNum}\t${line}`
+          }).join('\n')
+
+          let result = numbered
+          if (lines.length > offset + limit) {
+            result += `\n\n(${lines.length - offset - limit} more lines not shown)`
+          }
+
+          return result || '(empty PDF)'
+        } catch (err: any) {
+          if (err.message?.includes('Cannot find module') || err.message?.includes('pdfjs-dist')) {
+            return {
+              data: `Error: PDF support requires pdfjs-dist. Install it with: npm install pdfjs-dist`,
+              is_error: true,
+            }
+          }
+          return {
+            data: `Error: ${err.message}`,
+            is_error: true,
+          }
         }
       }
 
