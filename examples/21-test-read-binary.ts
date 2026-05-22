@@ -291,6 +291,9 @@ async function testLLM() {
         const output = (event as any).result?.output || ''
         console.log(`  [tool_result] ${output.slice(0, 200)}`)
       }
+      if (event.type === 'system' && (event as any).subtype === 'warning') {
+        console.log(`  [warning] ${(event as any).message}`)
+      }
       if (event.type === 'result') {
         const r = event as any
         console.log(`  → ${r.subtype} ${r.errors?.join(', ') || ''}`)
