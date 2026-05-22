@@ -118,7 +118,6 @@ export class OpenAIProvider implements LLMProvider {
   }
 
   async createMessage(params: CreateMessageParams): Promise<CreateMessageResponse> {
-    // Convert to OpenAI format
     const messages = this.convertMessages(params.system, params.messages)
     const tools = params.tools ? this.convertTools(params.tools) : undefined
 
@@ -136,8 +135,8 @@ export class OpenAIProvider implements LLMProvider {
       body.chat_template_kwargs = { enable_thinking: true }
     }
 
-    // Make API call
-    const response = await fetch(`${this.baseURL}/chat/completions`, {
+    let imageFallback = false
+    let response = await fetch(`${this.baseURL}/chat/completions`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -149,17 +148,44 @@ export class OpenAIProvider implements LLMProvider {
 
     if (!response.ok) {
       const errBody = await response.text().catch(() => '')
-      const err: any = new Error(
-        `OpenAI API error: ${response.status} ${response.statusText}: ${errBody}`,
-      )
-      err.status = response.status
-      throw err
+
+      if (this.isImageNotSupportedError(response.status, errBody) && this.hasImageContent(messages)) {
+        const strippedMessages = this.stripImageContent(messages)
+        const retryBody = { ...body, messages: strippedMessages }
+        response = await fetch(`${this.baseURL}/chat/completions`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${this.apiKey}`,
+          },
+          body: JSON.stringify(retryBody),
+          signal: params.signal,
+        })
+        if (!response.ok) {
+          const retryErrBody = await response.text().catch(() => '')
+          const err: any = new Error(
+            `OpenAI API error: ${response.status} ${response.statusText}: ${retryErrBody}`,
+          )
+          err.status = response.status
+          throw err
+        }
+        imageFallback = true
+      } else {
+        const err: any = new Error(
+          `OpenAI API error: ${response.status} ${response.statusText}: ${errBody}`,
+        )
+        err.status = response.status
+        throw err
+      }
     }
 
     const data = (await response.json()) as OpenAIChatResponse
 
-    // Convert response back to normalized format
-    return this.convertResponse(data)
+    const result = this.convertResponse(data)
+    if (imageFallback) {
+      result.warnings = ['Provider does not support image input; images were stripped from the request']
+    }
+    return result
   }
 
   async *createMessageStream(params: CreateMessageParams): AsyncGenerator<StreamChunk> {

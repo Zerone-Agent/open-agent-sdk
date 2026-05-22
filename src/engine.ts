@@ -478,6 +478,12 @@ export class QueryEngine {
             undefined,
             this.config.abortSignal,
           )
+
+          if (response.warnings && response.warnings.length > 0) {
+            for (const w of response.warnings) {
+              yield { type: 'system', subtype: 'warning', message: w } as any
+            }
+          }
         }
       } catch (err: any) {
         // Handle prompt-too-long by compacting

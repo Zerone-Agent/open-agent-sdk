@@ -68,6 +68,7 @@ export interface CreateMessageResponse {
     cache_creation_input_tokens?: number
     cache_read_input_tokens?: number
   }
+  warnings?: string[]
 }
 
 export type NormalizedResponseBlock =
