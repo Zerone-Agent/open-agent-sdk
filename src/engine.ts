@@ -199,7 +199,6 @@ export class QueryEngine {
       }
 
       if (chunk.type === 'tool_use') {
-        // Accumulate tool_use chunks by index
         const toolUse = toolUses.get(chunk.index) || { id: '', name: '', input: '' }
         if (chunk.id) {
           toolUse.id = chunk.id
@@ -208,20 +207,23 @@ export class QueryEngine {
           toolUse.name = chunk.name
         }
         if (chunk.input !== undefined && chunk.input !== '') {
-          toolUse.input = chunk.input
+          toolUse.input += chunk.input
         }
         toolUses.set(chunk.index, toolUse)
       }
     }
 
-    // Build complete tool_use blocks
     for (const [index, toolUse] of toolUses) {
-      if (toolUse.name && toolUse.input) {
+      if (toolUse.name) {
         let input: any
-        try {
-          input = JSON.parse(toolUse.input)
-        } catch {
-          input = toolUse.input
+        if (toolUse.input) {
+          try {
+            input = JSON.parse(toolUse.input)
+          } catch {
+            input = toolUse.input
+          }
+        } else {
+          input = {}
         }
         content.push({
           type: 'tool_use',
@@ -546,17 +548,28 @@ export class QueryEngine {
       }
 
       // Handle max_output_tokens recovery
-      if (
-        response.stopReason === 'max_tokens' &&
-        maxOutputRecoveryAttempts < MAX_OUTPUT_RECOVERY
-      ) {
-        maxOutputRecoveryAttempts++
-        // Add continuation prompt
-        this.messages.push({
-          role: 'user',
-          content: 'Please continue from where you left off.',
-        })
-        continue
+      if (response.stopReason === 'max_tokens' && maxOutputRecoveryAttempts < MAX_OUTPUT_RECOVERY) {
+        const hasToolUse = response.content.some((b: any) => b.type === 'tool_use')
+
+        if (hasToolUse) {
+          yield {
+            type: 'system',
+            subtype: 'warning',
+            message: `Output truncated (max_tokens). Tool call(s) may have incomplete arguments.`,
+          } as any
+        } else {
+          yield {
+            type: 'system',
+            subtype: 'warning',
+            message: `Output truncated (max_tokens). Text response was cut off.`,
+          } as any
+          maxOutputRecoveryAttempts++
+          this.messages.push({
+            role: 'user',
+            content: 'Please continue from where you left off.',
+          })
+          continue
+        }
       }
 
       // Check for tool use
@@ -635,6 +648,16 @@ export class QueryEngine {
         throw toolError
       }
 
+      // Yield warning if any tool call had truncated input
+      const truncatedCount = toolUseBlocks.filter((b) => typeof b.input === 'string').length
+      if (truncatedCount > 0) {
+        yield {
+          type: 'system',
+          subtype: 'warning',
+          message: `Output truncated. ${truncatedCount} tool call(s) had incomplete/unparseable JSON arguments.`,
+        } as any
+      }
+
       // Yield tool results
       for (const result of toolResults) {
         yield {
@@ -662,6 +685,18 @@ export class QueryEngine {
           is_error: r.is_error,
         })),
       })
+
+      // Sanitize assistant message: ensure tool_use input is an object (not raw string)
+      // so the API accepts it on subsequent turns. Done after execution to preserve
+      // original input for tool validation and error reporting.
+      const assistantMsg = this.messages[this.messages.length - 2]
+      if (assistantMsg?.role === 'assistant' && Array.isArray(assistantMsg.content)) {
+        for (const block of assistantMsg.content as any[]) {
+          if (block.type === 'tool_use' && typeof block.input === 'string') {
+            block.input = {}
+          }
+        }
+      }
 
       if (response.stopReason === 'end_turn') break
     }
@@ -728,6 +763,7 @@ export class QueryEngine {
       provider: this.provider,
       model: this.config.model,
       apiType: this.provider.apiType,
+      maxTokens: this.config.maxTokens,
       allowedSkills: this.config.allowedSkills,
       settingSources: this.config.settingSources,
       emitEvent: emitSubagentEvent
@@ -777,6 +813,25 @@ export class QueryEngine {
         type: 'tool_result',
         tool_use_id: block.id,
         content: `Error: Unknown tool "${block.name}"`,
+        is_error: true,
+        tool_name: block.name,
+      }
+    }
+
+    // Validate input: must be an object (not a raw string from failed JSON parse)
+    if (typeof block.input === 'string') {
+      return {
+        type: 'tool_result',
+        tool_use_id: block.id,
+        content: [
+          `Tool call "${block.name}" failed — input is not valid JSON.`,
+          '',
+          'Raw input (first 500 chars):',
+          block.input.slice(0, 500),
+          '',
+          'This usually happens when maxTokens is too low and the response was truncated.',
+          'Please try again with shorter content, or break the task into smaller steps.',
+        ].join('\n'),
         is_error: true,
         tool_name: block.name,
       }
@@ -850,6 +905,37 @@ export class QueryEngine {
         ].join('\n'),
         is_error: true,
         tool_name: block.name,
+      }
+    }
+
+    // Validate tool input: check required fields exist
+    if (block.input && typeof block.input === 'object' && tool.inputSchema?.required) {
+      const input = block.input as Record<string, unknown>
+      const missing = tool.inputSchema.required.filter(
+        (key) => input[key] === undefined || input[key] === null,
+      )
+      if (missing.length > 0) {
+        await this.executeHooks('PostToolUseFailure', {
+          toolName: block.name,
+          toolInput: block.input,
+          toolUseId: block.id,
+          error: `Missing required fields: ${missing.join(', ')}`,
+        })
+        return {
+          type: 'tool_result',
+          tool_use_id: block.id,
+          content: [
+            `Tool input validation failed for "${block.name}":`,
+            `Missing required fields: ${missing.join(', ')}`,
+            '',
+            'Input was:',
+            JSON.stringify(block.input, null, 2).slice(0, 2000),
+            '',
+            'Please fix the input and try again.',
+          ].join('\n'),
+          is_error: true,
+          tool_name: block.name,
+        }
       }
     }
 

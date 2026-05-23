@@ -237,6 +237,8 @@ export interface ToolContext {
   model?: string
   /** Parent agent's API type */
   apiType?: import('./providers/types.js').ApiType
+  /** Parent agent's maxTokens setting */
+  maxTokens?: number
   /**
    * Emit an event to the parent agent's streaming output.
    * Used by tools like AgentTool to propagate subagent events.

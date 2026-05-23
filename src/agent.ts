@@ -330,7 +330,7 @@ export class Agent {
       appendSystemPrompt,
       maxTurns: opts.maxTurns ?? 10,
       maxBudgetUsd: opts.maxBudgetUsd,
-      maxTokens: opts.maxTokens ?? 16384,
+      maxTokens: opts.maxTokens ?? 65536,
       thinking: opts.thinking,
       jsonSchema: opts.jsonSchema,
       canUseTool,

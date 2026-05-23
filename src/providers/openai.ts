@@ -21,34 +21,57 @@ import type {
 // SSE Stream Parsing
 // --------------------------------------------------------------------------
 
-/**
- * Parse SSE (Server-Sent Events) stream from OpenAI
- */
-async function* parseSSEStream(response: Response): AsyncGenerator<any> {
+const STREAM_IDLE_TIMEOUT_MS = 120_000
+
+async function* parseSSEStream(
+  response: Response,
+  signal?: AbortSignal,
+  onParseError?: (raw: string, error: unknown) => void,
+): AsyncGenerator<any> {
   const reader = response.body!.getReader()
   const decoder = new TextDecoder()
   let buffer = ''
 
-  while (true) {
-    const { done, value } = await reader.read()
-    if (done) break
+  try {
+    while (true) {
+      if (signal?.aborted) break
 
-    buffer += decoder.decode(value, { stream: true })
-    const lines = buffer.split('\n')
-    buffer = lines.pop() || ''
+      const readResult = await Promise.race([
+        reader.read(),
+        new Promise<{ done: true; value: undefined }>((resolve) => {
+          const timer = setTimeout(() => {
+            resolve({ done: true, value: undefined })
+          }, STREAM_IDLE_TIMEOUT_MS)
+          const onAbort = () => {
+            clearTimeout(timer)
+            resolve({ done: true, value: undefined })
+          }
+          signal?.addEventListener('abort', onAbort, { once: true })
+        }),
+      ])
 
-    for (const line of lines) {
-      const trimmed = line.trim()
-      if (trimmed.startsWith('data: ')) {
-        const data = trimmed.slice(6)
-        if (data === '[DONE]') return
-        try {
-          yield JSON.parse(data)
-        } catch {
-          // Ignore parse errors
+      if (readResult.done) break
+      if (!readResult.value) break
+
+      buffer += decoder.decode(readResult.value, { stream: true })
+      const lines = buffer.split('\n')
+      buffer = lines.pop() || ''
+
+      for (const line of lines) {
+        const trimmed = line.trim()
+        if (trimmed.startsWith('data: ')) {
+          const data = trimmed.slice(6)
+          if (data === '[DONE]') return
+          try {
+            yield JSON.parse(data)
+          } catch (err) {
+            onParseError?.(data, err)
+          }
         }
       }
     }
+  } finally {
+    reader.releaseLock()
   }
 }
 
@@ -257,80 +280,113 @@ export class OpenAIProvider implements LLMProvider {
       }
     }
 
-    const imageWarning = imageFallback
-      ? ['Provider does not support image input; images were stripped from the request']
-      : undefined
-
     let currentBlockIndex = -1
     const toolCalls: Map<number, { id: string; name: string; arguments: string }> = new Map()
+    const yieldedToolCallIndices: Set<number> = new Set()
+    const parseWarnings: string[] = imageFallback
+      ? ['Provider does not support image input; images were stripped from the request']
+      : []
 
-    for await (const chunk of parseSSEStream(response)) {
-      if (chunk.usage) {
-        yield {
-          type: 'usage',
-          index: -1,
-          warnings: imageWarning,
-          usage: {
-            input_tokens: chunk.usage.prompt_tokens || 0,
-            output_tokens: chunk.usage.completion_tokens || 0,
-            totalInputTokens: chunk.usage.prompt_tokens || 0,
-            cache_read_input_tokens: (chunk.usage as any)?.prompt_tokens_details?.cached_tokens || undefined,
-          },
-        }
-        if (imageWarning) imageWarning.length = 0
-      }
-
-      const choice = chunk.choices?.[0]
-      if (!choice) continue
-
-      const delta = choice.delta
-      if (!delta) continue
-
-      const reasoningContent = delta.reasoning_content || delta.reasoning
-      if (reasoningContent) {
-        yield {
-          type: 'thinking',
-          index: currentBlockIndex,
-          delta: reasoningContent,
-        }
-      }
-
-      if (delta.content) {
-        yield {
-          type: 'text',
-          index: currentBlockIndex,
-          delta: delta.content,
-        }
-      }
-
-      if (delta.tool_calls) {
-        for (const tc of delta.tool_calls) {
-          const index = tc.index || 0
-          currentBlockIndex = index
-
-          if (!toolCalls.has(index)) {
-            toolCalls.set(index, { id: tc.id || '', name: '', arguments: '' })
+    try {
+      for await (const chunk of parseSSEStream(response, params.signal, (raw, _err) => {
+        parseWarnings.push(`SSE parse error, dropped chunk: ${raw.slice(0, 100)}`)
+      })) {
+        if (chunk.usage) {
+          yield {
+            type: 'usage',
+            index: -1,
+            warnings: parseWarnings.length > 0 ? [...parseWarnings] : undefined,
+            usage: {
+              input_tokens: chunk.usage.prompt_tokens || 0,
+              output_tokens: chunk.usage.completion_tokens || 0,
+              totalInputTokens: chunk.usage.prompt_tokens || 0,
+              cache_read_input_tokens: (chunk.usage as any)?.prompt_tokens_details?.cached_tokens || undefined,
+            },
           }
+          parseWarnings.length = 0
+        }
 
-          const call = toolCalls.get(index)!
+        const choice = chunk.choices?.[0]
+        if (!choice) continue
 
-          if (tc.function?.name) {
-            call.name += tc.function.name
-          }
+        const delta = choice.delta
+        if (!delta) continue
 
-          if (tc.function?.arguments) {
-            call.arguments += tc.function.arguments
-          }
-
-          if (tc.id) {
-            call.id = tc.id
+        const reasoningContent = delta.reasoning_content || delta.reasoning
+        if (reasoningContent) {
+          yield {
+            type: 'thinking',
+            index: currentBlockIndex,
+            delta: reasoningContent,
           }
         }
+
+        if (delta.content) {
+          yield {
+            type: 'text',
+            index: currentBlockIndex,
+            delta: delta.content,
+          }
+        }
+
+        if (delta.tool_calls) {
+          for (const tc of delta.tool_calls) {
+            const index = tc.index || 0
+            currentBlockIndex = index
+
+            if (!toolCalls.has(index)) {
+              toolCalls.set(index, { id: tc.id || '', name: '', arguments: '' })
+            }
+
+            const call = toolCalls.get(index)!
+
+            if (tc.function?.name) {
+              call.name += tc.function.name
+            }
+
+            if (tc.function?.arguments) {
+              call.arguments += tc.function.arguments
+            }
+
+            if (tc.id) {
+              call.id = tc.id
+            }
+          }
+        }
+
+        if (choice.finish_reason) {
+          for (const [index, call] of toolCalls) {
+            if (call.name && !yieldedToolCallIndices.has(index)) {
+              yield {
+                type: 'tool_use',
+                index,
+                id: call.id,
+                name: call.name,
+                input: call.arguments,
+              }
+              yieldedToolCallIndices.add(index)
+            }
+          }
+        }
       }
+    } catch (streamErr) {
+      for (const [index, call] of toolCalls) {
+        if (call.name && !yieldedToolCallIndices.has(index)) {
+          yield {
+            type: 'tool_use',
+            index,
+            id: call.id,
+            name: call.name,
+            input: call.arguments,
+          }
+          yieldedToolCallIndices.add(index)
+        }
+      }
+      throw streamErr
     }
 
-    for await (const [index, call] of toolCalls) {
-      if (call.name) {
+    for (const [index, call] of toolCalls) {
+      if (call.name && !yieldedToolCallIndices.has(index)) {
         yield {
           type: 'tool_use',
           index,
