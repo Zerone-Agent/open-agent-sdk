@@ -116,7 +116,7 @@ export const AgentTool: ToolDefinition = {
       tools,
       systemPrompt,
       maxTurns: agentDef?.maxTurns || 10,
-      maxTokens: 16384,
+      maxTokens: context.maxTokens ?? 65536,
       canUseTool: async () => ({ behavior: 'allow' }),
       includePartialMessages: true,
       sessionId: subSessionId,
