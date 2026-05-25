@@ -12,6 +12,9 @@
  * 8. Retry with exponential backoff on transient errors
  */
 
+export const DEFAULT_MAX_TOKENS = 64 * 1024
+export const MAX_TOKENS_NON_STREAMING = 16 * 1024
+
 import type {
   SDKMessage,
   SDKSubagentMessage,
@@ -451,6 +454,9 @@ export class QueryEngine {
                 streamUsage.totalInputTokens = chunk.usage.totalInputTokens || chunk.usage.input_tokens
                 streamUsage.cache_creation_input_tokens = chunk.usage.cache_creation_input_tokens
                 streamUsage.cache_read_input_tokens = chunk.usage.cache_read_input_tokens
+                if (chunk.rawUsage) {
+                  streamUsage.rawUsage = chunk.rawUsage
+                }
               }
 
               if (chunk.type === 'text' || chunk.type === 'thinking') {
@@ -475,13 +481,16 @@ export class QueryEngine {
           if (streamUsage.input_tokens > 0 || streamUsage.output_tokens > 0) {
             response.usage = streamUsage
           }
+          if (streamUsage.rawUsage) {
+            response.rawUsage = streamUsage.rawUsage
+          }
         } else {
           // Non-streaming mode
           response = await withRetry(
             async () => {
               return this.provider.createMessage({
                 model: this.config.model,
-                maxTokens: this.config.maxTokens,
+                maxTokens: Math.min(this.config.maxTokens, MAX_TOKENS_NON_STREAMING),
                 system: systemPrompt,
                 messages: apiMessages,
                 tools: tools.length > 0 ? tools : undefined,
@@ -553,7 +562,7 @@ export class QueryEngine {
       pruneMessages(this.messages)
 
       // Add assistant message to conversation
-      this.messages.push({ role: 'assistant', content: response.content as any })
+      this.messages.push({ role: 'assistant', content: response.content as any, rawUsage: response.rawUsage })
 
       // Yield assistant message
       yield {

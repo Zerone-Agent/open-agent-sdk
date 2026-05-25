@@ -61,6 +61,7 @@ export class AnthropicProvider implements LLMProvider {
         cache_read_input_tokens:
           (response.usage as any).cache_read_input_tokens,
       },
+      rawUsage: response.usage,
     }
   }
 
@@ -127,6 +128,7 @@ export class AnthropicProvider implements LLMProvider {
               cache_creation_input_tokens: usage.cache_creation_input_tokens,
               cache_read_input_tokens: usage.cache_read_input_tokens,
             },
+            rawUsage: usage,
           }
         }
       }
