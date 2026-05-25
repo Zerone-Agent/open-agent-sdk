@@ -568,6 +568,10 @@ export class OpenAIProvider implements LLMProvider {
       }
     }
 
+    if (textParts.length === 0 && toolCalls.length === 0) {
+      return
+    }
+
     const assistantMsg: OpenAIChatMessage = {
       role: 'assistant',
       content: textParts.length > 0 ? textParts.join('\n') : null,
