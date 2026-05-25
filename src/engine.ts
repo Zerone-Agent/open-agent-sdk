@@ -392,14 +392,15 @@ export class QueryEngine {
       // Enforce request body size limit: strip images from oldest messages if needed
       const maxBodyBytes = this.config.maxRequestBodyBytes ?? DEFAULT_MAX_REQUEST_BODY_BYTES
       const bodySizeResult = enforceBodySizeLimit(apiMessages, maxBodyBytes, systemPrompt)
+      apiMessages = bodySizeResult.messages as NormalizedMessageParam[]
       if (bodySizeResult.strippedCount > 0) {
+        this.messages = apiMessages
         yield {
           type: 'system',
           subtype: 'warning',
           message: `Request body exceeded ${maxBodyBytes} byte limit. ${bodySizeResult.strippedCount} image(s) removed from older messages.`,
         } as any
       }
-      apiMessages = bodySizeResult.messages as NormalizedMessageParam[]
 
       this.turnCount++
       turnsRemaining--
