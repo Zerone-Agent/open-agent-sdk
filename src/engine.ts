@@ -417,7 +417,7 @@ export class QueryEngine {
           }
 
           const chunks: import('./providers/types.js').StreamChunk[] = []
-          const streamUsage = { input_tokens: 0, output_tokens: 0, totalInputTokens: 0 }
+          const streamUsage: any = { input_tokens: 0, output_tokens: 0, totalInputTokens: 0 }
 
           try {
             for await (const chunk of this.provider.createMessageStream({
@@ -449,6 +449,8 @@ export class QueryEngine {
                 streamUsage.input_tokens = chunk.usage.input_tokens
                 streamUsage.output_tokens = chunk.usage.output_tokens
                 streamUsage.totalInputTokens = chunk.usage.totalInputTokens || chunk.usage.input_tokens
+                streamUsage.cache_creation_input_tokens = chunk.usage.cache_creation_input_tokens
+                streamUsage.cache_read_input_tokens = chunk.usage.cache_read_input_tokens
               }
 
               if (chunk.type === 'text' || chunk.type === 'thinking') {
@@ -542,6 +544,7 @@ export class QueryEngine {
         this.totalUsage.output_tokens = response.usage.output_tokens
         this.totalUsage.cache_creation_input_tokens = response.usage.cache_creation_input_tokens
         this.totalUsage.cache_read_input_tokens = response.usage.cache_read_input_tokens
+        this.totalUsage.total_input_tokens = response.usage.totalInputTokens
         this.totalCost += estimateCost(this.config.model, response.usage)
         this.compactState.lastInputTokens = response.usage.totalInputTokens || response.usage.input_tokens
         this.compactState.lastOutputTokens = response.usage.output_tokens
@@ -997,13 +1000,7 @@ export class QueryEngine {
    * Get total usage across all turns.
    */
   private buildUsage(): TokenUsage {
-    return {
-      ...this.totalUsage,
-      total_input_tokens:
-        (this.totalUsage.input_tokens || 0) +
-        (this.totalUsage.cache_read_input_tokens || 0) +
-        (this.totalUsage.cache_creation_input_tokens || 0),
-    }
+    return { ...this.totalUsage }
   }
 
   getUsage(): TokenUsage {
