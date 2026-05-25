@@ -205,6 +205,7 @@ export interface TokenUsage {
   output_tokens: number
   cache_creation_input_tokens?: number
   cache_read_input_tokens?: number
+  total_input_tokens?: number
 }
 
 // --------------------------------------------------------------------------

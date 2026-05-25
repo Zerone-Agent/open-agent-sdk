@@ -288,7 +288,7 @@ export class QueryEngine {
         type: 'result',
         subtype: 'error_during_execution',
         is_error: true,
-        usage: this.totalUsage,
+        usage: this.buildUsage(),
         num_turns: 0,
         cost: 0,
         errors: ['Blocked by UserPromptSubmit hook'],
@@ -524,7 +524,7 @@ export class QueryEngine {
         yield {
           type: 'result',
           subtype: 'error',
-          usage: this.totalUsage,
+          usage: this.buildUsage(),
           num_turns: this.turnCount,
           cost: this.totalCost,
           errors: [err.message],
@@ -736,7 +736,7 @@ export class QueryEngine {
       num_turns: this.turnCount,
       total_cost_usd: this.totalCost,
       duration_api_ms: Math.round(this.apiTimeMs),
-      usage: this.totalUsage,
+      usage: this.buildUsage(),
       model_usage: { [this.config.model]: { input_tokens: this.totalUsage.input_tokens, output_tokens: this.totalUsage.output_tokens } },
       cost: this.totalCost,
     }
@@ -995,8 +995,18 @@ export class QueryEngine {
   /**
    * Get total usage across all turns.
    */
+  private buildUsage(): TokenUsage {
+    return {
+      ...this.totalUsage,
+      total_input_tokens:
+        (this.totalUsage.input_tokens || 0) +
+        (this.totalUsage.cache_read_input_tokens || 0) +
+        (this.totalUsage.cache_creation_input_tokens || 0),
+    }
+  }
+
   getUsage(): TokenUsage {
-    return { ...this.totalUsage }
+    return this.buildUsage()
   }
 
   /**
