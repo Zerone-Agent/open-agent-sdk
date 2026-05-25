@@ -29,7 +29,9 @@ import type {
 } from './providers/types.js'
 import {
   estimateCost,
+  DEFAULT_MAX_REQUEST_BODY_BYTES,
 } from './utils/tokens.js'
+import { enforceBodySizeLimit } from './utils/body-size.js'
 import {
   shouldAutoCompact,
   compactConversation,
@@ -383,9 +385,21 @@ export class QueryEngine {
       }
 
       // Micro-compact: truncate large tool results
-      const apiMessages = microCompactMessages(
+      let apiMessages = microCompactMessages(
         normalizeMessagesForAPI(this.messages as any[]),
       ) as NormalizedMessageParam[]
+
+      // Enforce request body size limit: strip images from oldest messages if needed
+      const maxBodyBytes = this.config.maxRequestBodyBytes ?? DEFAULT_MAX_REQUEST_BODY_BYTES
+      const bodySizeResult = enforceBodySizeLimit(apiMessages, maxBodyBytes, systemPrompt)
+      if (bodySizeResult.strippedCount > 0) {
+        yield {
+          type: 'system',
+          subtype: 'warning',
+          message: `Request body exceeded ${maxBodyBytes} byte limit. ${bodySizeResult.strippedCount} image(s) removed from older messages.`,
+        } as any
+      }
+      apiMessages = bodySizeResult.messages as NormalizedMessageParam[]
 
       this.turnCount++
       turnsRemaining--

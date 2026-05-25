@@ -253,6 +253,7 @@ export {
   estimateCost,
   MODEL_PRICING,
   AUTOCOMPACT_BUFFER_TOKENS,
+  DEFAULT_MAX_REQUEST_BODY_BYTES,
 } from './utils/tokens.js'
 
 // --------------------------------------------------------------------------
@@ -270,6 +271,15 @@ export {
   PRUNE_THRESHOLD_CHARS,
 } from './utils/compact.js'
 export type { AutoCompactState } from './utils/compact.js'
+
+// --------------------------------------------------------------------------
+// Request Body Size Management
+// --------------------------------------------------------------------------
+
+export {
+  estimateBodyBytes,
+  enforceBodySizeLimit,
+} from './utils/body-size.js'
 
 // --------------------------------------------------------------------------
 // Retry Logic

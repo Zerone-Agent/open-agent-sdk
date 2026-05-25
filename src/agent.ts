@@ -342,6 +342,7 @@ export class Agent {
       settingSources: opts.settingSources,
       allowedSkills: opts.allowedSkills,
       contextWindow: opts.contextWindow,
+      maxRequestBodyBytes: opts.maxRequestBodyBytes,
     }, { lastInputTokens: this.lastInputTokens, lastOutputTokens: this.lastOutputTokens })
     this.currentEngine = engine
 

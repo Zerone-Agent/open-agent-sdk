@@ -504,6 +504,8 @@ export interface AgentOptions {
   permissionPromptToolName?: string
   /** Context window size in tokens for the model. Overrides auto-detection from model name. */
   contextWindow?: number
+  /** Maximum request body size in bytes. Defaults to 6MB (6291456). Images are stripped from oldest messages when exceeded. */
+  maxRequestBodyBytes?: number
   /** Hook configurations */
   hooks?: Record<string, Array<{
     matcher?: string
@@ -556,4 +558,6 @@ export interface QueryEngineConfig {
   allowedSkills?: string[]
   /** Context window size in tokens for the model. Overrides auto-detection from model name. */
   contextWindow?: number
+  /** Maximum request body size in bytes. Images are stripped from oldest messages when exceeded. */
+  maxRequestBodyBytes?: number
 }
