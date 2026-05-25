@@ -97,11 +97,14 @@ export async function withRetry<T>(
  * Check if an error is a "prompt too long" error.
  */
 export function isPromptTooLongError(err: any): boolean {
+  if (err?.status === 413) return true
   if (err?.status === 400) {
     const message = err?.error?.error?.message || err?.message || ''
     return message.includes('prompt is too long') ||
       message.includes('max_tokens') ||
-      message.includes('context length')
+      message.includes('context length') ||
+      message.includes('max bytes to request body') ||
+      message.includes('TooLarge')
   }
   return false
 }

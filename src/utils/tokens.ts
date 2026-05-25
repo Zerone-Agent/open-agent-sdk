@@ -95,6 +95,8 @@ export function getContextWindowSize(model: string): number {
  */
 export const AUTOCOMPACT_BUFFER_TOKENS = 20_000
 
+export const DEFAULT_MAX_REQUEST_BODY_BYTES = 6 * 1024 * 1024
+
 export function getAutoCompactThreshold(model: string, contextWindow?: number): number {
   return (contextWindow ?? getContextWindowSize(model)) - AUTOCOMPACT_BUFFER_TOKENS
 }
