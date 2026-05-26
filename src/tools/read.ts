@@ -14,6 +14,19 @@ import { defineTool } from './types.js'
 
 const SAMPLE_BYTES = 4096
 const NON_PRINTABLE_THRESHOLD = 0.3
+const MAX_LONG_EDGE = 1536
+
+let _sharp: any = undefined
+async function getSharp(): Promise<any> {
+  if (_sharp === undefined) {
+    try {
+      _sharp = (await import('sharp')).default
+    } catch {
+      _sharp = null
+    }
+  }
+  return _sharp
+}
 
 const BINARY_EXTENSIONS = new Set([
   'doc', 'docx',
@@ -231,11 +244,37 @@ export const FileReadTool = defineTool({
 
       if (isImageAttachment(mime)) {
         const buffer = await readFile(filePath)
-        const base64 = buffer.toString('base64')
+        const sharp = await getSharp()
+
+        let outputBuffer = buffer
+        let outputMime = mime
+
+        if (sharp) {
+          const metadata = await sharp(buffer).metadata()
+          const width = metadata.width || 0
+          const height = metadata.height || 0
+          const longEdge = Math.max(width, height)
+          const isAlreadyJpeg = mime === 'image/jpeg'
+          const needsResize = longEdge > MAX_LONG_EDGE
+
+          if (isAlreadyJpeg && !needsResize) {
+            outputBuffer = buffer
+            outputMime = mime
+          } else {
+            let pipeline = sharp(buffer).flatten({ background: { r: 255, g: 255, b: 255 } })
+            if (needsResize) {
+              pipeline = pipeline.resize({ width: MAX_LONG_EDGE, height: MAX_LONG_EDGE, fit: 'inside', withoutEnlargement: true })
+            }
+            outputBuffer = await pipeline.jpeg({ quality: 85 }).toBuffer()
+            outputMime = 'image/jpeg'
+          }
+        }
+
+        const base64 = outputBuffer.toString('base64')
         return {
           data: [
             { type: 'text' as const, text: `[Image file: ${filePath} (${fileStat.size} bytes, ${mime})]` },
-            { type: 'image' as const, source: { type: 'base64' as const, media_type: mime as any, data: base64 } },
+            { type: 'image' as const, source: { type: 'base64' as const, media_type: outputMime as any, data: base64 } },
           ],
         }
       }
