@@ -337,6 +337,7 @@ export class Agent {
       includePartialMessages: opts.includePartialMessages ?? false,
       abortSignal: this.abortCtrl.signal,
       agents: opts.agents,
+      agentId: opts.agent ?? 'main',
       hookRegistry: this.hookRegistry,
       sessionId: this.sid,
       settingSources: opts.settingSources,

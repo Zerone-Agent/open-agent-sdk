@@ -65,6 +65,9 @@ import { TodoWriteTool } from './todo-tool.js'
 // Skill
 import { SkillTool } from './skill-tool.js'
 
+// Memory
+import { MemoryTool, SessionSearchTool, initMemoryTools } from '../memory/memory-tools.js'
+
 /**
  * All built-in tools (30+).
  */
@@ -130,6 +133,10 @@ const ALL_TOOLS: ToolDefinition[] = [
 
   // Skill
   SkillTool,
+
+  // Memory
+  MemoryTool,
+  SessionSearchTool,
 ]
 
 /**
@@ -233,6 +240,11 @@ export {
   TodoWriteTool,
   // Skill
   SkillTool,
+
+  // Memory
+  MemoryTool,
+  SessionSearchTool,
+  initMemoryTools,
 }
 
 // Re-export helpers

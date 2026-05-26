@@ -94,6 +94,7 @@ export const AgentTool: ToolDefinition = {
     }
 
     tools = tools.filter(t => t.name !== 'Agent')
+    tools = tools.filter(t => t.name !== 'Memory')
 
     const systemPrompt = agentDef?.prompt ||
       'You are a helpful assistant. Complete the given task using the available tools.'
@@ -115,6 +116,7 @@ export const AgentTool: ToolDefinition = {
       provider,
       tools,
       systemPrompt,
+      agentId: agentType,
       maxTurns: agentDef?.maxTurns || 10,
       maxTokens: context.maxTokens ?? 65536,
       canUseTool: async () => ({ behavior: 'allow' }),
