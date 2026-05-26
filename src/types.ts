@@ -248,6 +248,8 @@ export interface ToolContext {
   allowedSkills?: string[]
   /** Setting sources for filesystem skill loading */
   settingSources?: SettingSource[]
+  /** Agent identifier for memory isolation */
+  agentId: string
 }
 
 export interface ToolResult {
@@ -558,6 +560,8 @@ export interface QueryEngineConfig {
   allowedSkills?: string[]
   /** Context window size in tokens for the model. Overrides auto-detection from model name. */
   contextWindow?: number
+  /** Agent identifier for memory isolation */
+  agentId: string
   /** Maximum request body size in bytes. Images are stripped from oldest messages when exceeded. */
   maxRequestBodyBytes?: number
 }
