@@ -35,6 +35,7 @@ export interface CreateMessageParams {
 export interface NormalizedMessageParam {
   role: 'user' | 'assistant'
   content: string | NormalizedContentBlock[]
+  rawUsage?: any
 }
 
 export type NormalizedContentBlock =
@@ -68,6 +69,7 @@ export interface CreateMessageResponse {
     cache_creation_input_tokens?: number
     cache_read_input_tokens?: number
   }
+  rawUsage?: any
   warnings?: string[]
 }
 
@@ -91,6 +93,7 @@ export interface StreamChunk {
     cache_creation_input_tokens?: number
     cache_read_input_tokens?: number
   }
+  rawUsage?: any
 }
 
 // --------------------------------------------------------------------------

@@ -41,6 +41,7 @@ import { loadSkillsFromFilesystem, registerSkill as registryRegisterSkill, unreg
 import type { SkillDefinition } from './skills/types.js'
 import { createProvider, type LLMProvider, type ApiType } from './providers/index.js'
 import type { NormalizedMessageParam } from './providers/types.js'
+import { DEFAULT_MAX_TOKENS } from './engine.js'
 import { SYSTEM_PROMPTS } from './prompts/system-prompts.js'
 
 // --------------------------------------------------------------------------
@@ -330,7 +331,7 @@ export class Agent {
       appendSystemPrompt,
       maxTurns: opts.maxTurns ?? 10,
       maxBudgetUsd: opts.maxBudgetUsd,
-      maxTokens: opts.maxTokens ?? 65536,
+      maxTokens: opts.maxTokens ?? DEFAULT_MAX_TOKENS,
       thinking: opts.thinking,
       jsonSchema: opts.jsonSchema,
       canUseTool,
@@ -386,6 +387,7 @@ export class Agent {
           await saveSession(this.sid, this.history, {
             cwd: this.cfg.cwd || process.cwd(),
             model: this.modelId,
+            provider: this.apiType,
             summary: undefined,
             lastInputTokens: this.lastInputTokens,
             lastOutputTokens: this.lastOutputTokens,
@@ -600,6 +602,7 @@ export class Agent {
         await saveSession(this.sid, this.history, {
           cwd: this.cfg.cwd || process.cwd(),
           model: this.modelId,
+          provider: this.apiType,
           summary: undefined,
           lastInputTokens: this.lastInputTokens,
           lastOutputTokens: this.lastOutputTokens,

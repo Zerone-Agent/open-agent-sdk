@@ -16,6 +16,7 @@ export interface SessionMetadata {
   id: string
   cwd: string
   model: string
+  provider?: string
   createdAt: string
   updatedAt: string
   messageCount: number
@@ -63,6 +64,7 @@ export async function saveSession(
       id: sessionId,
       cwd: metadata.cwd || process.cwd(),
       model: metadata.model || 'claude-sonnet-4-6',
+      provider: metadata.provider,
       createdAt: metadata.createdAt || new Date().toISOString(),
       updatedAt: new Date().toISOString(),
       messageCount: messages.length,

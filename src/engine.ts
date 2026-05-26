@@ -12,6 +12,9 @@
  * 8. Retry with exponential backoff on transient errors
  */
 
+export const DEFAULT_MAX_TOKENS = 64 * 1024
+export const MAX_TOKENS_NON_STREAMING = 16 * 1024
+
 import type {
   SDKMessage,
   SDKSubagentMessage,
@@ -288,7 +291,7 @@ export class QueryEngine {
         type: 'result',
         subtype: 'error_during_execution',
         is_error: true,
-        usage: this.totalUsage,
+        usage: { ...this.totalUsage },
         num_turns: 0,
         cost: 0,
         errors: ['Blocked by UserPromptSubmit hook'],
@@ -392,14 +395,15 @@ export class QueryEngine {
       // Enforce request body size limit: strip images from oldest messages if needed
       const maxBodyBytes = this.config.maxRequestBodyBytes ?? DEFAULT_MAX_REQUEST_BODY_BYTES
       const bodySizeResult = enforceBodySizeLimit(apiMessages, maxBodyBytes, systemPrompt)
+      apiMessages = bodySizeResult.messages as NormalizedMessageParam[]
       if (bodySizeResult.strippedCount > 0) {
+        this.messages = apiMessages
         yield {
           type: 'system',
           subtype: 'warning',
           message: `Request body exceeded ${maxBodyBytes} byte limit. ${bodySizeResult.strippedCount} image(s) removed from older messages.`,
         } as any
       }
-      apiMessages = bodySizeResult.messages as NormalizedMessageParam[]
 
       this.turnCount++
       turnsRemaining--
@@ -416,7 +420,7 @@ export class QueryEngine {
           }
 
           const chunks: import('./providers/types.js').StreamChunk[] = []
-          const streamUsage = { input_tokens: 0, output_tokens: 0, totalInputTokens: 0 }
+          const streamUsage: any = { input_tokens: 0, output_tokens: 0, totalInputTokens: 0 }
 
           try {
             for await (const chunk of this.provider.createMessageStream({
@@ -448,6 +452,11 @@ export class QueryEngine {
                 streamUsage.input_tokens = chunk.usage.input_tokens
                 streamUsage.output_tokens = chunk.usage.output_tokens
                 streamUsage.totalInputTokens = chunk.usage.totalInputTokens || chunk.usage.input_tokens
+                streamUsage.cache_creation_input_tokens = chunk.usage.cache_creation_input_tokens
+                streamUsage.cache_read_input_tokens = chunk.usage.cache_read_input_tokens
+                if (chunk.rawUsage) {
+                  streamUsage.rawUsage = chunk.rawUsage
+                }
               }
 
               if (chunk.type === 'text' || chunk.type === 'thinking') {
@@ -472,13 +481,16 @@ export class QueryEngine {
           if (streamUsage.input_tokens > 0 || streamUsage.output_tokens > 0) {
             response.usage = streamUsage
           }
+          if (streamUsage.rawUsage) {
+            response.rawUsage = streamUsage.rawUsage
+          }
         } else {
           // Non-streaming mode
           response = await withRetry(
             async () => {
               return this.provider.createMessage({
                 model: this.config.model,
-                maxTokens: this.config.maxTokens,
+                maxTokens: Math.min(this.config.maxTokens, MAX_TOKENS_NON_STREAMING),
                 system: systemPrompt,
                 messages: apiMessages,
                 tools: tools.length > 0 ? tools : undefined,
@@ -524,7 +536,7 @@ export class QueryEngine {
         yield {
           type: 'result',
           subtype: 'error',
-          usage: this.totalUsage,
+          usage: { ...this.totalUsage },
           num_turns: this.turnCount,
           cost: this.totalCost,
           errors: [err.message],
@@ -541,6 +553,7 @@ export class QueryEngine {
         this.totalUsage.output_tokens = response.usage.output_tokens
         this.totalUsage.cache_creation_input_tokens = response.usage.cache_creation_input_tokens
         this.totalUsage.cache_read_input_tokens = response.usage.cache_read_input_tokens
+        this.totalUsage.total_input_tokens = response.usage.totalInputTokens
         this.totalCost += estimateCost(this.config.model, response.usage)
         this.compactState.lastInputTokens = response.usage.totalInputTokens || response.usage.input_tokens
         this.compactState.lastOutputTokens = response.usage.output_tokens
@@ -549,7 +562,7 @@ export class QueryEngine {
       pruneMessages(this.messages)
 
       // Add assistant message to conversation
-      this.messages.push({ role: 'assistant', content: response.content as any })
+      this.messages.push({ role: 'assistant', content: response.content as any, rawUsage: response.rawUsage })
 
       // Yield assistant message
       yield {
@@ -736,7 +749,7 @@ export class QueryEngine {
       num_turns: this.turnCount,
       total_cost_usd: this.totalCost,
       duration_api_ms: Math.round(this.apiTimeMs),
-      usage: this.totalUsage,
+      usage: { ...this.totalUsage },
       model_usage: { [this.config.model]: { input_tokens: this.totalUsage.input_tokens, output_tokens: this.totalUsage.output_tokens } },
       cost: this.totalCost,
     }
@@ -993,9 +1006,6 @@ export class QueryEngine {
     return [...this.messages]
   }
 
-  /**
-   * Get total usage across all turns.
-   */
   getUsage(): TokenUsage {
     return { ...this.totalUsage }
   }
