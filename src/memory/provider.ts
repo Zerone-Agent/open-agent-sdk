@@ -50,7 +50,7 @@ export interface MemoryProvider {
   getAll(agentName: string, target: MemoryTarget): Promise<MemoryEntry[]>
   getStats(agentName: string, target: MemoryTarget): Promise<MemoryStats>
   renderSnapshot(agentName: string): Promise<string>
-  search(query: string, opts?: { limit?: number; offset?: number }): Promise<MemorySearchResult[]>
+  search(query: string, opts?: { limit?: number; offset?: number; dateFrom?: string; dateTo?: string }): Promise<MemorySearchResult[]>
   listSessions(opts?: { dateFrom?: string; dateTo?: string; limit?: number; offset?: number }): Promise<SessionInfo[]>
   getMessages(sessionId: string, opts?: { dateFrom?: string; dateTo?: string; limit?: number }): Promise<MessageInfo[]>
   promoteToLongTerm(agentName: string, opts: PromoteOptions): Promise<{ ok: boolean; message: string }>
