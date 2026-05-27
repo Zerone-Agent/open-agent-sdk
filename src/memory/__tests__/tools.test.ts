@@ -168,7 +168,7 @@ describe('SessionSearchTool', () => {
       toolContext,
     )
 
-    expect(provider.search).toHaveBeenCalledWith('hello', { limit: 5, offset: 0 })
+    expect(provider.search).toHaveBeenCalledWith('hello', { limit: 5, offset: 0, dateFrom: undefined, dateTo: undefined })
     expect(result.content).toBe('[2026-05-25 12:00:00] user: Hello world')
   })
 
@@ -221,7 +221,7 @@ describe('SessionSearchTool', () => {
       toolContext,
     )
 
-    expect(provider.search).toHaveBeenCalledWith('test', { limit: undefined, offset: undefined })
+    expect(provider.search).toHaveBeenCalledWith('test', { limit: undefined, offset: undefined, dateFrom: undefined, dateTo: undefined })
   })
 
   it('delegates list_sessions action to provider.listSessions', async () => {

@@ -121,7 +121,7 @@ export const SessionSearchTool = defineTool({
         if (!input.query || typeof input.query !== 'string' || !input.query.trim()) {
           return '请提供搜索关键词。'
         }
-        const results = await provider.search(input.query, { limit: input.limit, offset: input.offset })
+        const results = await provider.search(input.query, { limit: input.limit, offset: input.offset, dateFrom: input.date_from, dateTo: input.date_to })
         if (results.length === 0) return '未找到匹配的消息。'
         return results
           .map(r => `[${r.createdAt}] ${r.role}: ${r.content}`)
