@@ -421,6 +421,7 @@ export class QueryEngine {
 
           const chunks: import('./providers/types.js').StreamChunk[] = []
           const streamUsage: any = { input_tokens: 0, output_tokens: 0, totalInputTokens: 0 }
+          const seenToolUseIndices = new Set<number>()
 
           try {
             for await (const chunk of this.provider.createMessageStream({
@@ -456,6 +457,20 @@ export class QueryEngine {
                 streamUsage.cache_read_input_tokens = chunk.usage.cache_read_input_tokens
                 if (chunk.rawUsage) {
                   streamUsage.rawUsage = chunk.rawUsage
+                }
+              }
+
+              if (chunk.type === 'tool_use') {
+                if (!seenToolUseIndices.has(chunk.index)) {
+                  seenToolUseIndices.add(chunk.index)
+                  yield {
+                    type: 'partial_message',
+                    partial: {
+                      type: 'tool_use',
+                      tool_name: chunk.name || '',
+                      tool_use_id: chunk.id || '',
+                    },
+                  }
                 }
               }
 
