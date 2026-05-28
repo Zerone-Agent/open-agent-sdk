@@ -18,20 +18,11 @@ async function main() {
   })
 
   let lastType = ''
-  let eventCount = 0
 
   for await (const event of agent.query(
     '使用 Read 工具读取当前目录下的 package.json 文件，告诉我项目名称和版本号。',
   )) {
-    eventCount++
-    const ts = Date.now()
-    console.log(`\x1b[36m[${ts}] event #${eventCount} type=${event.type}\x1b[0m`)
-
     switch (event.type) {
-      case 'system': {
-        console.log(`  subtype=${(event as any).subtype}`)
-        break
-      }
       case 'partial_message': {
         if (event.partial.type === 'text') {
           if (lastType === 'thinking') {
@@ -81,10 +72,8 @@ async function main() {
     }
   }
 
-  console.log(`\n\n=== DONE (${eventCount} events total) ===\n`)
-
+  console.log('\n')
   await agent.close()
-  console.log('Agent closed.')
 }
 
 main().catch(console.error)
