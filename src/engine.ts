@@ -690,6 +690,49 @@ export class QueryEngine {
         throw toolError
       }
 
+      // Fill in missing tool results for tools skipped due to abort.
+      // This ensures every tool_use block has a matching tool_result in the transcript.
+      if (this.config.abortSignal?.aborted) {
+        const completedIds = new Set(toolResults.map(r => r.tool_use_id))
+        for (const block of toolUseBlocks) {
+          if (!completedIds.has(block.id)) {
+            toolResults.push({
+              type: 'tool_result',
+              tool_use_id: block.id,
+              content: 'Tool execution aborted by user',
+              is_error: true,
+              tool_name: block.name,
+            })
+          }
+        }
+      }
+
+      // Add tool results to conversation BEFORE yielding, so that if the
+      // generator is force-returned during yield, messages are already persisted.
+      this.messages.push({
+        role: 'user',
+        content: toolResults.map((r) => ({
+          type: 'tool_result' as const,
+          tool_use_id: r.tool_use_id,
+          content: r.content,
+          is_error: r.is_error,
+        })),
+      })
+
+      // Sanitize assistant message: ensure tool_use input is an object (not raw string)
+      // so the API accepts it on subsequent turns. Must happen BEFORE any yield to
+      // guarantee the transcript is consistent even if generator is force-returned.
+      const assistantMsg = this.messages[this.messages.length - 2]
+      if (assistantMsg?.role === 'assistant' && Array.isArray(assistantMsg.content)) {
+        for (const block of assistantMsg.content as any[]) {
+          if (block.type === 'tool_use' && typeof block.input === 'string') {
+            block.input = {}
+          }
+        }
+      }
+
+      // Now safe to yield — all state is persisted
+
       // Yield warning if any tool call had truncated input
       const truncatedCount = toolUseBlocks.filter((b) => typeof b.input === 'string').length
       if (truncatedCount > 0) {
@@ -714,29 +757,6 @@ export class QueryEngine {
                   ? (result.content as any[]).map((b: any) => b.type === 'text' ? b.text : `[${b.type}]`).join('\n')
                   : JSON.stringify(result.content),
           },
-        }
-      }
-
-      // Add tool results to conversation
-      this.messages.push({
-        role: 'user',
-        content: toolResults.map((r) => ({
-          type: 'tool_result' as const,
-          tool_use_id: r.tool_use_id,
-          content: r.content,
-          is_error: r.is_error,
-        })),
-      })
-
-      // Sanitize assistant message: ensure tool_use input is an object (not raw string)
-      // so the API accepts it on subsequent turns. Done after execution to preserve
-      // original input for tool validation and error reporting.
-      const assistantMsg = this.messages[this.messages.length - 2]
-      if (assistantMsg?.role === 'assistant' && Array.isArray(assistantMsg.content)) {
-        for (const block of assistantMsg.content as any[]) {
-          if (block.type === 'tool_use' && typeof block.input === 'string') {
-            block.input = {}
-          }
         }
       }
 
