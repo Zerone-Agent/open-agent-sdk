@@ -150,11 +150,19 @@ export const BashTool = defineTool({
 
       if (context.abortSignal) {
         context.abortSignal.addEventListener('abort', () => {
-          try { process.kill(-proc.pid!, 'SIGTERM') } catch {}
-          const killTimer = setTimeout(() => {
-            try { process.kill(-proc.pid!, 'SIGKILL') } catch {}
-          }, 1000)
-          proc.on('exit', () => clearTimeout(killTimer))
+          if (process.platform === 'win32') {
+            try {
+              crossSpawn.sync('taskkill', ['/T', '/F', '/PID', String(proc.pid)], { stdio: 'ignore' })
+            } catch {}
+            proc.stdout?.destroy()
+            proc.stderr?.destroy()
+          } else {
+            try { process.kill(-proc.pid!, 'SIGTERM') } catch {}
+            const killTimer = setTimeout(() => {
+              try { process.kill(-proc.pid!, 'SIGKILL') } catch {}
+            }, 1000)
+            proc.on('exit', () => clearTimeout(killTimer))
+          }
         }, { once: true })
       }
 
