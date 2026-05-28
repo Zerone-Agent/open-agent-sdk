@@ -142,6 +142,7 @@ export const BashTool = defineTool({
         timeout: timeoutMs,
         stdio: ['pipe', 'pipe', 'pipe'],
         windowsHide: true,
+        detached: true,
       })
 
       proc.stdout?.on('data', (data: Buffer) => chunks.push(data))
@@ -149,11 +150,11 @@ export const BashTool = defineTool({
 
       if (context.abortSignal) {
         context.abortSignal.addEventListener('abort', () => {
-          proc.kill('SIGTERM')
+          try { process.kill(-proc.pid!, 'SIGTERM') } catch {}
           const killTimer = setTimeout(() => {
-            proc.kill('SIGKILL')
+            try { process.kill(-proc.pid!, 'SIGKILL') } catch {}
           }, 1000)
-          proc.on('close', () => clearTimeout(killTimer))
+          proc.on('exit', () => clearTimeout(killTimer))
         }, { once: true })
       }
 
