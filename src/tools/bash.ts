@@ -150,6 +150,10 @@ export const BashTool = defineTool({
       if (context.abortSignal) {
         context.abortSignal.addEventListener('abort', () => {
           proc.kill('SIGTERM')
+          const killTimer = setTimeout(() => {
+            proc.kill('SIGKILL')
+          }, 1000)
+          proc.on('close', () => clearTimeout(killTimer))
         }, { once: true })
       }
 
