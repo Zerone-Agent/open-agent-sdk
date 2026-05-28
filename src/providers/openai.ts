@@ -36,19 +36,18 @@ async function* parseSSEStream(
     while (true) {
       if (signal?.aborted) break
 
+      let idleTimer: ReturnType<typeof setTimeout> | undefined
       const readResult = await Promise.race([
         reader.read(),
         new Promise<{ done: true; value: undefined }>((resolve) => {
-          const timer = setTimeout(() => {
+          idleTimer = setTimeout(() => resolve({ done: true, value: undefined }), STREAM_IDLE_TIMEOUT_MS)
+          signal?.addEventListener('abort', () => {
+            if (idleTimer) clearTimeout(idleTimer)
             resolve({ done: true, value: undefined })
-          }, STREAM_IDLE_TIMEOUT_MS)
-          const onAbort = () => {
-            clearTimeout(timer)
-            resolve({ done: true, value: undefined })
-          }
-          signal?.addEventListener('abort', onAbort, { once: true })
+          }, { once: true })
         }),
       ])
+      if (idleTimer) clearTimeout(idleTimer)
 
       if (readResult.done) break
       if (!readResult.value) break
@@ -71,7 +70,8 @@ async function* parseSSEStream(
       }
     }
   } finally {
-    reader.releaseLock()
+    await reader.cancel()
+    try { await response.body?.cancel() } catch {}
   }
 }
 
