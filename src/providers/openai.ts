@@ -341,23 +341,34 @@ export class OpenAIProvider implements LLMProvider {
 
             const call = toolCalls.get(index)!
 
+            if (tc.id) {
+              call.id = tc.id
+            }
+
             if (tc.function?.name) {
               call.name += tc.function.name
+
+              if (!yieldedToolCallIndices.has(index)) {
+                yield {
+                  type: 'tool_use',
+                  index,
+                  id: call.id,
+                  name: call.name,
+                  input: '',
+                }
+                yieldedToolCallIndices.add(index)
+              }
             }
 
             if (tc.function?.arguments) {
               call.arguments += tc.function.arguments
-            }
-
-            if (tc.id) {
-              call.id = tc.id
             }
           }
         }
 
         if (choice.finish_reason) {
           for (const [index, call] of toolCalls) {
-            if (call.name && !yieldedToolCallIndices.has(index)) {
+            if (call.name) {
               yield {
                 type: 'tool_use',
                 index,
@@ -365,14 +376,13 @@ export class OpenAIProvider implements LLMProvider {
                 name: call.name,
                 input: call.arguments,
               }
-              yieldedToolCallIndices.add(index)
             }
           }
         }
       }
     } catch (streamErr) {
       for (const [index, call] of toolCalls) {
-        if (call.name && !yieldedToolCallIndices.has(index)) {
+        if (call.name) {
           yield {
             type: 'tool_use',
             index,
@@ -380,14 +390,13 @@ export class OpenAIProvider implements LLMProvider {
             name: call.name,
             input: call.arguments,
           }
-          yieldedToolCallIndices.add(index)
         }
       }
       throw streamErr
     }
 
     for (const [index, call] of toolCalls) {
-      if (call.name && !yieldedToolCallIndices.has(index)) {
+      if (call.name) {
         yield {
           type: 'tool_use',
           index,
