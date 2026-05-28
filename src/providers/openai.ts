@@ -283,6 +283,7 @@ export class OpenAIProvider implements LLMProvider {
     let currentBlockIndex = -1
     const toolCalls: Map<number, { id: string; name: string; arguments: string }> = new Map()
     const yieldedToolCallIndices: Set<number> = new Set()
+    const completedToolCallIndices: Set<number> = new Set()
     const parseWarnings: string[] = imageFallback
       ? ['Provider does not support image input; images were stripped from the request']
       : []
@@ -368,7 +369,7 @@ export class OpenAIProvider implements LLMProvider {
 
         if (choice.finish_reason) {
           for (const [index, call] of toolCalls) {
-            if (call.name) {
+            if (call.name && !completedToolCallIndices.has(index)) {
               yield {
                 type: 'tool_use',
                 index,
@@ -376,13 +377,14 @@ export class OpenAIProvider implements LLMProvider {
                 name: call.name,
                 input: call.arguments,
               }
+              completedToolCallIndices.add(index)
             }
           }
         }
       }
     } catch (streamErr) {
       for (const [index, call] of toolCalls) {
-        if (call.name) {
+        if (call.name && !completedToolCallIndices.has(index)) {
           yield {
             type: 'tool_use',
             index,
@@ -390,13 +392,14 @@ export class OpenAIProvider implements LLMProvider {
             name: call.name,
             input: call.arguments,
           }
+          completedToolCallIndices.add(index)
         }
       }
       throw streamErr
     }
 
     for (const [index, call] of toolCalls) {
-      if (call.name) {
+      if (call.name && !completedToolCallIndices.has(index)) {
         yield {
           type: 'tool_use',
           index,
