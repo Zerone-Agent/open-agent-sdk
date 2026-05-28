@@ -36,19 +36,18 @@ async function* parseSSEStream(
     while (true) {
       if (signal?.aborted) break
 
+      let idleTimer: ReturnType<typeof setTimeout> | undefined
       const readResult = await Promise.race([
         reader.read(),
         new Promise<{ done: true; value: undefined }>((resolve) => {
-          const timer = setTimeout(() => {
+          idleTimer = setTimeout(() => resolve({ done: true, value: undefined }), STREAM_IDLE_TIMEOUT_MS)
+          signal?.addEventListener('abort', () => {
+            if (idleTimer) clearTimeout(idleTimer)
             resolve({ done: true, value: undefined })
-          }, STREAM_IDLE_TIMEOUT_MS)
-          const onAbort = () => {
-            clearTimeout(timer)
-            resolve({ done: true, value: undefined })
-          }
-          signal?.addEventListener('abort', onAbort, { once: true })
+          }, { once: true })
         }),
       ])
+      if (idleTimer) clearTimeout(idleTimer)
 
       if (readResult.done) break
       if (!readResult.value) break
@@ -71,7 +70,8 @@ async function* parseSSEStream(
       }
     }
   } finally {
-    reader.releaseLock()
+    await reader.cancel()
+    try { await response.body?.cancel() } catch {}
   }
 }
 
@@ -283,6 +283,7 @@ export class OpenAIProvider implements LLMProvider {
     let currentBlockIndex = -1
     const toolCalls: Map<number, { id: string; name: string; arguments: string }> = new Map()
     const yieldedToolCallIndices: Set<number> = new Set()
+    const completedToolCallIndices: Set<number> = new Set()
     const parseWarnings: string[] = imageFallback
       ? ['Provider does not support image input; images were stripped from the request']
       : []
@@ -341,23 +342,34 @@ export class OpenAIProvider implements LLMProvider {
 
             const call = toolCalls.get(index)!
 
+            if (tc.id) {
+              call.id = tc.id
+            }
+
             if (tc.function?.name) {
               call.name += tc.function.name
+
+              if (!yieldedToolCallIndices.has(index)) {
+                yield {
+                  type: 'tool_use',
+                  index,
+                  id: call.id,
+                  name: call.name,
+                  input: '',
+                }
+                yieldedToolCallIndices.add(index)
+              }
             }
 
             if (tc.function?.arguments) {
               call.arguments += tc.function.arguments
-            }
-
-            if (tc.id) {
-              call.id = tc.id
             }
           }
         }
 
         if (choice.finish_reason) {
           for (const [index, call] of toolCalls) {
-            if (call.name && !yieldedToolCallIndices.has(index)) {
+            if (call.name && !completedToolCallIndices.has(index)) {
               yield {
                 type: 'tool_use',
                 index,
@@ -365,14 +377,14 @@ export class OpenAIProvider implements LLMProvider {
                 name: call.name,
                 input: call.arguments,
               }
-              yieldedToolCallIndices.add(index)
+              completedToolCallIndices.add(index)
             }
           }
         }
       }
     } catch (streamErr) {
       for (const [index, call] of toolCalls) {
-        if (call.name && !yieldedToolCallIndices.has(index)) {
+        if (call.name && !completedToolCallIndices.has(index)) {
           yield {
             type: 'tool_use',
             index,
@@ -380,14 +392,14 @@ export class OpenAIProvider implements LLMProvider {
             name: call.name,
             input: call.arguments,
           }
-          yieldedToolCallIndices.add(index)
+          completedToolCallIndices.add(index)
         }
       }
       throw streamErr
     }
 
     for (const [index, call] of toolCalls) {
-      if (call.name && !yieldedToolCallIndices.has(index)) {
+      if (call.name && !completedToolCallIndices.has(index)) {
         yield {
           type: 'tool_use',
           index,

@@ -33,6 +33,10 @@ async function main() {
         if (event.partial.type === 'thinking') {
           process.stdout.write(`\x1b[90m${event.partial.text}\x1b[0m`)
         }
+        if (event.partial.type === 'tool_use') {
+          if (lastType !== 'tool_use') process.stdout.write('\n\n')
+          process.stdout.write(`\x1b[33m⏳ Preparing tool call: ${event.partial.tool_name}...\x1b[0m`)
+        }
         lastType = event.partial.type
         break
       }
@@ -63,11 +67,13 @@ async function main() {
         if (event.errors) {
           console.log(`Errors: ${event.errors.join(', ')}`)
         }
+        break
       }
     }
   }
 
   console.log('\n')
+  await agent.close()
 }
 
 main().catch(console.error)
