@@ -374,7 +374,6 @@ export type {
   SessionInfo,
   MessageInfo,
   MemoryTarget,
-  PromoteOptions,
 } from './memory/provider.js'
 
 // --------------------------------------------------------------------------
