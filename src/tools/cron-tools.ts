@@ -5,7 +5,7 @@
  * RemoteTrigger - Manage remote scheduled agent triggers.
  */
 
-import type { ToolDefinition, ToolResult } from '../types.js'
+import type { ToolDefinition, ToolResult, ToolContext } from '../types.js'
 import type { CronTask } from '../cron/types.js'
 import type { CronStorage } from '../cron/storage.js'
 import {
@@ -86,8 +86,8 @@ export const CronCreateTool: ToolDefinition = {
     'No need to calculate absolute times — just pass the relative delay (e.g. 300 = 5 minutes, 3600 = 1 hour). ' +
     'The tool converts it to an absolute schedule automatically.\n' +
     'Always prefer this tool over system schedulers like `at`, `crontab`, or `sleep`.\n\n' +
-    '**IMPORTANT: Agent selection rule (MANDATORY)** — You MUST analyze the task content and set the `agent` field to the best-matching agent ID. ' +
-    'If you do not provide an agent, the task creation will fail.\n' +
+    '**Agent selection** — Analyze the task content and set the `agent` field to the best-matching agent ID. ' +
+    'If omitted, the current conversation agent is used automatically.\n' +
     'Do NOT embed agent role instructions in the prompt — the selected agent will automatically apply its own system prompt and tools.',
   inputSchema: {
     type: 'object',
@@ -111,7 +111,7 @@ export const CronCreateTool: ToolDefinition = {
       durable: { type: 'boolean', description: 'Whether the task should survive temporary cleanup' },
       agent: {
         type: 'string',
-        description: 'REQUIRED. Agent ID to execute this task. Analyze the task content and select the best-matching agent from the list above. Do NOT omit this field.',
+        description: 'Agent ID to execute this task. Analyze the task content and select the best-matching agent from the list above. If omitted, defaults to the current conversation agent.',
       },
     },
     required: ['cron', 'prompt', 'recurring'],
@@ -120,7 +120,7 @@ export const CronCreateTool: ToolDefinition = {
   isConcurrencySafe: () => true,
   isEnabled: () => true,
   async prompt() { return 'Create a scheduled cron task.' },
-  async call(input: any): Promise<ToolResult> {
+  async call(input: any, context: ToolContext): Promise<ToolResult> {
     const cronStorage = storage
     if (!cronStorage) return notInitializedResult()
 
@@ -178,15 +178,9 @@ export const CronCreateTool: ToolDefinition = {
       task.permanent = input.durable
     }
 
-    const resolvedAgent = typeof input.agent === 'string' ? input.agent : undefined
-    if (!resolvedAgent) {
-      return {
-        type: 'tool_result',
-        tool_use_id: '',
-        content: '错误：创建 cron 任务时必须指定 agent 字段。请根据任务内容分析并选择最合适的 agent。',
-        is_error: true,
-      }
-    }
+    const resolvedAgent = typeof input.agent === 'string' && input.agent
+      ? input.agent
+      : context.agentId
     task.agentId = resolvedAgent
 
     const id = await cronStorage.add(task)
