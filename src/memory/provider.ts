@@ -1,4 +1,4 @@
-export type MemoryTarget = 'memory' | 'user' | 'working'
+export type MemoryTarget = 'memory' | 'user'
 
 export interface MemoryEntry {
   id: string
@@ -38,11 +38,6 @@ export interface MessageInfo {
   createdAt: string
 }
 
-export interface PromoteOptions {
-  content?: string
-  oldText?: string
-}
-
 export interface MemoryProvider {
   add(agentName: string, target: MemoryTarget, content: string): Promise<{ ok: boolean; message: string }>
   replace(agentName: string, target: MemoryTarget, oldText: string, newText: string): Promise<{ ok: boolean; message: string }>
@@ -53,5 +48,4 @@ export interface MemoryProvider {
   search(query: string, opts?: { limit?: number; offset?: number; dateFrom?: string; dateTo?: string }): Promise<MemorySearchResult[]>
   listSessions(opts?: { dateFrom?: string; dateTo?: string; limit?: number; offset?: number }): Promise<SessionInfo[]>
   getMessages(sessionId: string, opts?: { dateFrom?: string; dateTo?: string; limit?: number }): Promise<MessageInfo[]>
-  promoteToLongTerm(agentName: string, opts: PromoteOptions): Promise<{ ok: boolean; message: string }>
 }
