@@ -100,7 +100,7 @@ export {
   WebSearchTool,
 
   // Agent & Multi-agent
-  AgentTool,
+  TaskTool,
   SendMessageTool,
   TeamCreateTool,
   TeamDeleteTool,
@@ -326,7 +326,7 @@ export {
 export {
   registerAgents,
   clearAgents,
-} from './tools/agent-tool.js'
+} from './tools/task-tool.js'
 
 export {
   setQuestionHandler,

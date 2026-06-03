@@ -1,36 +1,18 @@
-/**
- * AgentTool - Spawn subagents for parallel/delegated work
- *
- * Supports built-in agents (Explore, Plan) and custom agent definitions.
- * Agents run as nested query loops with their own context and tool sets.
- * Subagent events are propagated to the parent stream via context.emitEvent.
- */
-
 import type { ToolDefinition, ToolContext, ToolResult, AgentDefinition } from '../types.js'
 import { QueryEngine } from '../engine.js'
 import { getAllBaseTools, filterTools } from './index.js'
 import { createProvider, type ApiType } from '../providers/index.js'
 
-// Store for registered agent definitions
 let registeredAgents: Record<string, AgentDefinition> = {}
 
-/**
- * Register agent definitions for the AgentTool to use.
- */
 export function registerAgents(agents: Record<string, AgentDefinition>): void {
   registeredAgents = { ...registeredAgents, ...agents }
 }
 
-/**
- * Clear registered agents.
- */
 export function clearAgents(): void {
   registeredAgents = {}
 }
 
-/**
- * Built-in agent definitions.
- */
 const BUILTIN_AGENTS: Record<string, AgentDefinition> = {
   Explore: {
     description: 'Fast agent for exploring codebases. Use for finding files, searching code, and answering questions about the codebase.',
@@ -44,9 +26,9 @@ const BUILTIN_AGENTS: Record<string, AgentDefinition> = {
   },
 }
 
-export const AgentTool: ToolDefinition = {
-  name: 'Agent',
-  description: 'Launch a subagent to handle complex, multi-step tasks autonomously. Subagents have their own context and can run specialized tool sets.',
+export const TaskTool: ToolDefinition = {
+  name: 'Task',
+  description: 'Launch a new agent to handle complex, multistep tasks autonomously. When using the Task tool, you must specify a subagent_type parameter to select which agent type to use.',
   inputSchema: {
     type: 'object',
     properties: {
@@ -81,7 +63,7 @@ export const AgentTool: ToolDefinition = {
   isConcurrencySafe: () => false,
   isEnabled: () => true,
   async prompt() {
-    return 'Launch a subagent to handle complex tasks autonomously.'
+    return 'Launch a new agent to handle complex, multistep tasks autonomously.'
   },
   async call(input: any, context: ToolContext): Promise<ToolResult> {
     const agentType = input.subagent_type || 'general-purpose'
@@ -93,7 +75,7 @@ export const AgentTool: ToolDefinition = {
       tools = filterTools(tools, agentDef.tools)
     }
 
-    tools = tools.filter(t => t.name !== 'Agent')
+    tools = tools.filter(t => t.name !== 'Task')
     tools = tools.filter(t => t.name !== 'Memory')
 
     const systemPrompt = agentDef?.prompt ||

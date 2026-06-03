@@ -47,7 +47,7 @@ ALL_TOOLS (34个)  →  buildToolPool()        →  executeTools()
 | | NotebookEdit | ✗ | ✗ | `notebook-edit.ts` |
 | **Web** | WebFetch | ✓ | ✓ | `web-fetch.ts` |
 | | WebSearch | ✗ | ✓ | `web-search.ts` |
-| **多 Agent** | Agent | ✗ | ✗ | `agent-tool.ts` |
+| **多 Agent** | Task | ✗ | ✗ | `task-tool.ts` |
 | | SendMessage | ✗ | ✓ | `send-message.ts` |
 | | TeamCreate | ✗ | ✗ | `team-tools.ts` |
 | | TeamDelete | ✗ | ✗ | `team-tools.ts` |
@@ -159,7 +159,7 @@ allowedTools?: string[]
 
 **影响**：使用侧若期望"所有工具可见，部分免确认"的语义，需要把 `allowedTools` 的过滤逻辑从工具池构建阶段移到 `executeSingleTool` 的权限判断中。
 
-### 2.3 子 Agent 工具隔离（`src/tools/agent-tool.ts:91-96`）
+### 2.3 子 Agent 工具隔离（`src/tools/task-tool.ts:91-96`）
 
 ```typescript
 let tools = getAllBaseTools()                    // 继承全部基础工具
@@ -222,7 +222,7 @@ SessionStart → UserPromptSubmit → [Agentic Loop] → Stop → SessionEnd
 
 ### 3.4 子 Agent 事件传播
 
-AgentTool 创建子 agent 时，通过 `context.emitEvent` 回调将子 agent 的事件包装为 `SDKSubagentMessage` 传播给父 agent 的流式输出：
+TaskTool 创建子 agent 时，通过 `context.emitEvent` 回调将子 agent 的事件包装为 `SDKSubagentMessage` 传播给父 agent 的流式输出：
 
 ```typescript
 // engine.ts 中的异步队列机制
@@ -257,7 +257,7 @@ pendingSubagentEvents → yield → 父 agent 的 query() generator
 
 ### 4.3 多 Agent 工具组
 
-#### Agent（`agent-tool.ts`）
+#### Task（`task-tool.ts`）
 
 启动子 agent 执行复杂任务。关键设计：
 
@@ -550,7 +550,7 @@ interface CronStorage {
 
 ### 8.4 MCP 工具不继承到子 Agent
 
-**问题**：`AgentTool` 中子 agent 只继承 `getAllBaseTools()`，不继承父 agent 的 MCP 工具。
+**问题**：`TaskTool` 中子 agent 只继承 `getAllBaseTools()`，不继承父 agent 的 MCP 工具。
 
 **建议**：将父 agent 的完整 toolPool 传递给子 agent，或至少传递 MCP 工具。
 

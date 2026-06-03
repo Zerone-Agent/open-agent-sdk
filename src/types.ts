@@ -190,7 +190,7 @@ export interface SDKRateLimitEvent {
 /** Subagent streaming event — wraps a subagent's SDKMessage for the parent stream. */
 export interface SDKSubagentMessage {
   type: 'subagent'
-  /** The tool_use_id of the parent Agent tool call that spawned this subagent */
+  /** The tool_use_id of the parent Task tool call that spawned this subagent */
   parent_tool_use_id: string
   /** The subagent's session ID */
   session_id?: string
@@ -244,7 +244,7 @@ export interface ToolContext {
   maxTokens?: number
   /**
    * Emit an event to the parent agent's streaming output.
-   * Used by tools like AgentTool to propagate subagent events.
+   * Used by tools like TaskTool to propagate subagent events.
    */
   emitEvent?: (event: SDKMessage) => void
   /** Allowed skills whitelist (inherited from agent config) */

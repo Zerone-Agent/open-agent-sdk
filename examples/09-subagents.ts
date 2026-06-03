@@ -14,7 +14,7 @@ async function main() {
   for await (const message of query({
     prompt: 'Use the code-reviewer agent to review src/agent.ts',
     options: {
-      allowedTools: ['Read', 'Glob', 'Grep', 'Agent'],
+      allowedTools: ['Read', 'Glob', 'Grep', 'Task'],
       agents: {
         'code-reviewer': {
           description: 'Expert code reviewer for quality and security reviews.',
