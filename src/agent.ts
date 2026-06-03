@@ -502,17 +502,6 @@ export class Agent {
   }
 
   /**
-   * Stop a background task.
-   */
-  async stopTask(taskId: string): Promise<void> {
-    const { getTask } = await import('./tools/task-tools.js')
-    const task = getTask(taskId)
-    if (task) {
-      task.status = 'cancelled'
-    }
-  }
-
-  /**
    * Reload all skills from filesystem and bundled definitions.
    * Returns the updated skills list and any changes.
    *

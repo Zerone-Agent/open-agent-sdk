@@ -14,7 +14,7 @@
  * - Multi-turn session persistence
  * - Permission system (allow/deny/bypass modes)
  * - Subagent spawning & team coordination
- * - Task management & scheduling
+ * - Scheduling
  * - Hook system with lifecycle integration (pre/post tool use, session, compact)
  * - Token estimation & cost tracking
  * - File state LRU caching
@@ -104,14 +104,6 @@ export {
   SendMessageTool,
   TeamCreateTool,
   TeamDeleteTool,
-
-  // Tasks
-  TaskCreateTool,
-  TaskListTool,
-  TaskUpdateTool,
-  TaskGetTool,
-  TaskStopTool,
-  TaskOutputTool,
 
   // Worktree
   EnterWorktreeTool,
@@ -311,17 +303,6 @@ export {
   createFileStateCache,
 } from './utils/fileCache.js'
 export type { FileState } from './utils/fileCache.js'
-
-// --------------------------------------------------------------------------
-// Task & Team State (for advanced usage)
-// --------------------------------------------------------------------------
-
-export {
-  getAllTasks,
-  getTask,
-  clearTasks,
-} from './tools/task-tools.js'
-export type { Task, TaskStatus } from './tools/task-tools.js'
 
 export {
   getAllTeams,
