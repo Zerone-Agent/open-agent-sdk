@@ -21,7 +21,7 @@ import { WebFetchTool } from './web-fetch.js'
 import { WebSearchTool } from './web-search.js'
 
 // Agent & Multi-agent
-import { AgentTool } from './agent-tool.js'
+import { TaskTool } from './task-tool.js'
 import { SendMessageTool } from './send-message.js'
 import { TeamCreateTool, TeamDeleteTool } from './team-tools.js'
 
@@ -76,7 +76,7 @@ const ALL_TOOLS: ToolDefinition[] = [
   WebSearchTool,
 
   // Agent & Multi-agent
-  AgentTool,
+  TaskTool,
   SendMessageTool,
   TeamCreateTool,
   TeamDeleteTool,
@@ -185,7 +185,7 @@ export {
   WebFetchTool,
   WebSearchTool,
   // Agent
-  AgentTool,
+  TaskTool,
   SendMessageTool,
   TeamCreateTool,
   TeamDeleteTool,

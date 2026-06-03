@@ -31,7 +31,7 @@ import { QueryEngine } from './engine.js'
 import { getAllBaseTools, filterTools } from './tools/index.js'
 import { connectMCPServer, type MCPConnection } from './mcp/client.js'
 import { isSdkServerConfig } from './sdk-mcp-server.js'
-import { registerAgents } from './tools/agent-tool.js'
+import { registerAgents } from './tools/task-tool.js'
 import {
   saveSession,
   loadSession,
