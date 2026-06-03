@@ -25,16 +25,6 @@ import { AgentTool } from './agent-tool.js'
 import { SendMessageTool } from './send-message.js'
 import { TeamCreateTool, TeamDeleteTool } from './team-tools.js'
 
-// Tasks
-import {
-  TaskCreateTool,
-  TaskListTool,
-  TaskUpdateTool,
-  TaskGetTool,
-  TaskStopTool,
-  TaskOutputTool,
-} from './task-tools.js'
-
 // Worktree
 import { EnterWorktreeTool, ExitWorktreeTool } from './worktree-tools.js'
 
@@ -90,14 +80,6 @@ const ALL_TOOLS: ToolDefinition[] = [
   SendMessageTool,
   TeamCreateTool,
   TeamDeleteTool,
-
-  // Tasks
-  TaskCreateTool,
-  TaskListTool,
-  TaskUpdateTool,
-  TaskGetTool,
-  TaskStopTool,
-  TaskOutputTool,
 
   // Worktree
   EnterWorktreeTool,
@@ -207,13 +189,6 @@ export {
   SendMessageTool,
   TeamCreateTool,
   TeamDeleteTool,
-  // Tasks
-  TaskCreateTool,
-  TaskListTool,
-  TaskUpdateTool,
-  TaskGetTool,
-  TaskStopTool,
-  TaskOutputTool,
   // Worktree
   EnterWorktreeTool,
   ExitWorktreeTool,

@@ -51,12 +51,6 @@ ALL_TOOLS (34个)  →  buildToolPool()        →  executeTools()
 | | SendMessage | ✗ | ✓ | `send-message.ts` |
 | | TeamCreate | ✗ | ✗ | `team-tools.ts` |
 | | TeamDelete | ✗ | ✗ | `team-tools.ts` |
-| **任务** | TaskCreate | ✗ | ✓ | `task-tools.ts` |
-| | TaskList | ✓ | ✓ | `task-tools.ts` |
-| | TaskUpdate | ✗ | ✓ | `task-tools.ts` |
-| | TaskGet | ✓ | ✓ | `task-tools.ts` |
-| | TaskStop | ✗ | ✓ | `task-tools.ts` |
-| | TaskOutput | ✓ | ✓ | `task-tools.ts` |
 | **Worktree** | EnterWorktree | ✗ | ✗ | `worktree-tools.ts` |
 | | ExitWorktree | ✗ | ✗ | `worktree-tools.ts` |
 | **规划** | EnterPlanMode | ✗ | ✗ | `plan-tools.ts` |
@@ -306,40 +300,7 @@ interface Team {
 
 进程内 `Map` 存储，无持久化。
 
-### 4.4 任务工具组（`task-tools.ts`）
-
-结构化任务管理系统，6 个独立工具：
-
-```
-TaskCreate → 创建任务
-TaskList   → 列出/过滤任务（按 status、owner）
-TaskUpdate → 更新任务状态/描述/负责人/输出
-TaskGet    → 获取任务详情
-TaskStop   → 取消任务
-TaskOutput → 获取任务输出结果
-```
-
-数据模型：
-
-```typescript
-interface Task {
-  id: string
-  subject: string
-  description?: string
-  status: 'pending' | 'in_progress' | 'completed' | 'failed' | 'cancelled'
-  owner?: string
-  output?: string
-  blockedBy?: string[]     // 预留：依赖关系
-  blocks?: string[]        // 预留：阻塞关系
-  metadata?: Record<string, unknown>
-}
-```
-
-**状态机**：`pending → in_progress → completed / failed / cancelled`
-
-**注意**：`blockedBy` / `blocks` 字段已定义但无检查逻辑，为预留设计。
-
-### 4.5 TodoWrite vs Task 对比
+### 4.4 TodoWrite
 
 | 维度 | TodoWrite | Task 工具组 |
 |------|-----------|------------|
@@ -351,7 +312,7 @@ interface Task {
 | 依赖关系 | 无 | blockedBy / blocks（预留） |
 | 用途 | LLM 自用备忘录 | 多 agent 协作任务追踪 |
 
-### 4.6 Worktree 工具组（`worktree-tools.ts`）
+### 4.5 Worktree 工具组（`worktree-tools.ts`）
 
 Git worktree 隔离环境管理：
 
@@ -360,7 +321,7 @@ Git worktree 隔离环境管理：
 
 进程内 `activeWorktrees: Map` 跟踪活跃 worktree。
 
-### 4.7 Plan Mode 工具组（`plan-tools.ts`）
+### 4.6 Plan Mode 工具组（`plan-tools.ts`）
 
 结构化规划模式：
 
@@ -369,14 +330,14 @@ Git worktree 隔离环境管理：
 
 进程级单例状态（`planModeActive` + `currentPlan`），同一进程同时只有一个 plan。
 
-### 4.8 用户交互工具（`ask-user.ts`）
+### 4.7 用户交互工具（`ask-user.ts`）
 
 AskUserQuestion：向用户提问并等待回复。
 
 - SDK 模式：通过 `setQuestionHandler()` 注入回调
 - 非交互模式：返回默认消息，使用 best judgment 继续
 
-### 4.9 LSP 工具（`lsp-tool.ts`）
+### 4.8 LSP 工具（`lsp-tool.ts`）
 
 代码智能工具，支持 9 种操作。**当前为降级实现**——无真正 LSP Server 连接，回退到 grep/ripgrep：
 
@@ -389,7 +350,7 @@ AskUserQuestion：向用户提问并等待回复。
 | workspaceSymbol | grep 搜索全局符号 |
 | prepareCallHierarchy / incomingCalls / outgoingCalls | 未实现，提示"需要 LSP Server" |
 
-### 4.10 Config 工具（`config-tool.ts`）
+### 4.9 Config 工具（`config-tool.ts`）
 
 进程内 KV 存储，`Map<string, unknown>`：
 
@@ -398,7 +359,7 @@ AskUserQuestion：向用户提问并等待回复。
 - 纯内存，不持久化
 - 导出 `getConfig()` / `setConfig()` 供使用侧代码读写
 
-### 4.11 Skill 工具（`skill-tool.ts`）
+### 4.10 Skill 工具（`skill-tool.ts`）
 
 技能加载工具，从技能注册表加载特定技能的完整指令到对话上下文。
 
