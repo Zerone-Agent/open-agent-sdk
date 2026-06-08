@@ -177,8 +177,12 @@ export class Agent {
 
     if (!raw || (typeof raw === 'object' && !Array.isArray(raw) && 'type' in raw)) {
       pool = getAllBaseTools()
-    } else if (Array.isArray(raw) && raw.length > 0 && typeof raw[0] === 'string') {
-      pool = filterTools(getAllBaseTools(), raw as string[])
+    } else if (Array.isArray(raw)) {
+      const strings = raw.filter((r): r is string => typeof r === 'string')
+      const defs = raw.filter((r): r is ToolDefinition => typeof r !== 'string')
+      pool = strings.length > 0
+        ? [...filterTools(getAllBaseTools(), strings), ...defs]
+        : defs
     } else {
       pool = raw as ToolDefinition[]
     }
