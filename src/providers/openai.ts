@@ -413,6 +413,33 @@ export class OpenAIProvider implements LLMProvider {
     yield { type: 'done', index: -1 }
   }
 
+  private ensureToolCallResponses(messages: OpenAIChatMessage[]): void {
+    const i = messages.length - 1
+    for (let j = i; j >= 0; j--) {
+      const msg = messages[j]
+      if (msg.role !== 'assistant' || !msg.tool_calls || msg.tool_calls.length === 0) continue
+
+      const respondedIds = new Set<string>()
+      for (let k = j + 1; k < messages.length; k++) {
+        const next = messages[k]
+        if (next.role === 'assistant') break
+        if (next.role === 'tool' && next.tool_call_id) {
+          respondedIds.add(next.tool_call_id)
+        }
+      }
+
+      const missing = msg.tool_calls.filter(tc => !respondedIds.has(tc.id))
+      if (missing.length > 0) {
+        const placeholders: OpenAIChatMessage[] = missing.map(tc => ({
+          role: 'tool' as const,
+          tool_call_id: tc.id,
+          content: 'Tool execution result was lost during context compaction.',
+        }))
+        messages.splice(j + 1, 0, ...placeholders)
+      }
+    }
+  }
+
   // --------------------------------------------------------------------------
   // Image Fallback Helpers
   // --------------------------------------------------------------------------
@@ -474,6 +501,8 @@ export class OpenAIProvider implements LLMProvider {
         this.convertAssistantMessage(msg, result)
       }
     }
+
+    this.ensureToolCallResponses(result)
 
     return result
   }
