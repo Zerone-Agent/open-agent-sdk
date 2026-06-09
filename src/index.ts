@@ -140,11 +140,6 @@ export {
 
   // Skill
   SkillTool,
-
-  // Memory
-  MemoryTool,
-  SessionSearchTool,
-  initMemoryTools,
 } from './tools/index.js'
 
 // --------------------------------------------------------------------------
@@ -346,16 +341,6 @@ export {
   clearCronJobs,
 } from './tools/cron-tools.js'
 export type { CronJob } from './tools/cron-tools.js'
-
-export type {
-  MemoryProvider,
-  MemoryEntry,
-  MemoryStats,
-  MemorySearchResult,
-  SessionInfo,
-  MessageInfo,
-  MemoryTarget,
-} from './memory/provider.js'
 
 // --------------------------------------------------------------------------
 // Cron Utilities
