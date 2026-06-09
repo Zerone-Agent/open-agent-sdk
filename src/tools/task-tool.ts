@@ -74,9 +74,11 @@ export const TaskTool: ToolDefinition = {
     if (agentDef?.tools) {
       tools = filterTools(tools, agentDef.tools)
     }
+    if (agentDef?.disallowedTools) {
+      tools = filterTools(tools, undefined, agentDef.disallowedTools)
+    }
 
     tools = tools.filter(t => t.name !== 'Task')
-    tools = tools.filter(t => t.name !== 'Memory')
 
     const systemPrompt = agentDef?.prompt ||
       'You are a helpful assistant. Complete the given task using the available tools.'
