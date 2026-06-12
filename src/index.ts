@@ -373,7 +373,7 @@ export {
   getTodos,
   clearTodos,
 } from './tools/todo-tool.js'
-export type { TodoItem } from './tools/todo-tool.js'
+export type { TodoInfo, TodoStatus, TodoPriority } from './tools/todo-tool.js'
 
 // --------------------------------------------------------------------------
 // Types

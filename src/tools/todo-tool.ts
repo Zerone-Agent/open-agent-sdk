@@ -1,112 +1,190 @@
-/**
- * TodoWriteTool - Session todo/checklist management
- *
- * Manages a session-scoped todo list for tracking work items.
- */
+import { readFile, writeFile, mkdir } from 'node:fs/promises'
+import { join } from 'node:path'
+import { existsSync } from 'node:fs'
+import type { ToolDefinition, ToolContext, ToolResult } from '../types.js'
 
-import type { ToolDefinition, ToolResult } from '../types.js'
+export type TodoStatus = 'pending' | 'in_progress' | 'completed' | 'cancelled'
+export type TodoPriority = 'high' | 'medium' | 'low'
 
-export interface TodoItem {
-  id: number
-  text: string
-  done: boolean
-  priority?: 'high' | 'medium' | 'low'
+export interface TodoInfo {
+  content: string
+  status: TodoStatus
+  priority: TodoPriority
 }
 
-const todoList: TodoItem[] = []
-let todoCounter = 0
+const VALID_STATUSES: readonly string[] = ['pending', 'in_progress', 'completed', 'cancelled']
+const VALID_PRIORITIES: readonly string[] = ['high', 'medium', 'low']
 
-/**
- * Get all todos.
- */
-export function getTodos(): TodoItem[] {
-  return [...todoList]
+let _description = ''
+
+async function loadDescription(): Promise<string> {
+  if (_description) return _description
+  try {
+    const { fileURLToPath } = await import('node:url')
+    const { dirname, join } = await import('node:path')
+    const __filename = fileURLToPath(import.meta.url)
+    const __dirname = dirname(__filename)
+    const { readFile } = await import('node:fs/promises')
+    _description = await readFile(join(__dirname, 'todowrite.txt'), 'utf-8')
+  } catch {
+    _description = 'Manage a structured task list for your current coding session.'
+  }
+  return _description
 }
 
-/**
- * Clear all todos.
- */
-export function clearTodos(): void {
-  todoList.length = 0
-  todoCounter = 0
+function getTodosDir(): string {
+  const home = process.env.HOME || process.env.USERPROFILE || '/tmp'
+  return join(home, '.openagent', 'sessions')
+}
+
+function getTodosPath(sessionId: string): string {
+  return join(getTodosDir(), sessionId, 'todos.json')
+}
+
+interface TodoFile {
+  updatedAt: string
+  todos: TodoInfo[]
+}
+
+async function saveTodos(sessionId: string, todos: TodoInfo[]): Promise<void> {
+  const dir = join(getTodosDir(), sessionId)
+  await mkdir(dir, { recursive: true })
+
+  const data: TodoFile = {
+    updatedAt: new Date().toISOString(),
+    todos,
+  }
+
+  await writeFile(getTodosPath(sessionId), JSON.stringify(data, null, 2), 'utf-8')
+}
+
+async function loadTodos(sessionId: string): Promise<TodoInfo[]> {
+  const filePath = getTodosPath(sessionId)
+  if (!existsSync(filePath)) return []
+
+  try {
+    const raw = await readFile(filePath, 'utf-8')
+    const data = JSON.parse(raw) as TodoFile
+    return data.todos || []
+  } catch {
+    return []
+  }
+}
+
+function validateTodos(todos: any[]): string | null {
+  if (!Array.isArray(todos)) return 'todos must be an array'
+
+  for (let i = 0; i < todos.length; i++) {
+    const item = todos[i]
+    if (!item.content || typeof item.content !== 'string' || item.content.trim() === '') {
+      return `todos[${i}].content must be a non-empty string`
+    }
+    if (!VALID_STATUSES.includes(item.status)) {
+      return `todos[${i}].status must be one of: ${VALID_STATUSES.join(', ')}`
+    }
+    if (!VALID_PRIORITIES.includes(item.priority)) {
+      return `todos[${i}].priority must be one of: ${VALID_PRIORITIES.join(', ')}`
+    }
+  }
+
+  const inProgressCount = todos.filter((t: any) => t.status === 'in_progress').length
+  if (inProgressCount > 1) {
+    return `Warning: ${inProgressCount} tasks are in_progress. Only one should be in_progress at a time.`
+  }
+
+  return null
+}
+
+const STATUS_ICONS: Record<TodoStatus, string> = {
+  pending: '\u2610',
+  in_progress: '\u29D6',
+  completed: '\u2713',
+  cancelled: '\u2717',
+}
+
+function formatTodos(todos: TodoInfo[]): string {
+  if (todos.length === 0) return 'No todos.'
+
+  const incomplete = todos.filter(t => t.status !== 'completed' && t.status !== 'cancelled').length
+  const lines: string[] = [`${incomplete} todo${incomplete !== 1 ? 's' : ''}:`]
+
+  for (const t of todos) {
+    const icon = STATUS_ICONS[t.status]
+    lines.push(`  ${icon} ${t.content} (${t.priority}) [${t.status}]`)
+  }
+
+  return lines.join('\n')
+}
+
+export async function getTodos(sessionId: string): Promise<TodoInfo[]> {
+  return loadTodos(sessionId)
+}
+
+export async function clearTodos(sessionId: string): Promise<void> {
+  await saveTodos(sessionId, [])
 }
 
 export const TodoWriteTool: ToolDefinition = {
   name: 'TodoWrite',
-  description: 'Manage a session todo/checklist. Supports add, toggle, remove, and list operations.',
+  description: 'Manage a structured task list for your current coding session. See prompt for detailed usage instructions.',
   inputSchema: {
     type: 'object',
     properties: {
-      action: {
-        type: 'string',
-        enum: ['add', 'toggle', 'remove', 'list', 'clear'],
-        description: 'Operation to perform',
-      },
-      text: { type: 'string', description: 'Todo item text (for add)' },
-      id: { type: 'number', description: 'Todo item ID (for toggle/remove)' },
-      priority: {
-        type: 'string',
-        enum: ['high', 'medium', 'low'],
-        description: 'Priority level (for add)',
+      todos: {
+        type: 'array',
+        description: 'The updated todo list',
+        items: {
+          type: 'object',
+          properties: {
+            content: { type: 'string', description: 'Brief description of the task' },
+            status: {
+              type: 'string',
+              enum: ['pending', 'in_progress', 'completed', 'cancelled'],
+              description: 'Current status of the task',
+            },
+            priority: {
+              type: 'string',
+              enum: ['high', 'medium', 'low'],
+              description: 'Priority level of the task',
+            },
+          },
+          required: ['content', 'status', 'priority'],
+        },
       },
     },
-    required: ['action'],
+    required: ['todos'],
   },
   isReadOnly: () => false,
   isConcurrencySafe: () => true,
   isEnabled: () => true,
-  async prompt() { return 'Manage session todo list.' },
-  async call(input: any): Promise<ToolResult> {
-    switch (input.action) {
-      case 'add': {
-        if (!input.text) {
-          return { type: 'tool_result', tool_use_id: '', content: 'text required', is_error: true }
-        }
-        const item: TodoItem = {
-          id: ++todoCounter,
-          text: input.text,
-          done: false,
-          priority: input.priority,
-        }
-        todoList.push(item)
-        return { type: 'tool_result', tool_use_id: '', content: `Todo added: #${item.id} "${item.text}"` }
-      }
+  async prompt() {
+    return loadDescription()
+  },
+  async call(input: any, context: ToolContext): Promise<ToolResult> {
+    const todos = input.todos
+    if (!Array.isArray(todos)) {
+      return { type: 'tool_result', tool_use_id: '', content: 'todos must be an array', is_error: true }
+    }
 
-      case 'toggle': {
-        const item = todoList.find(t => t.id === input.id)
-        if (!item) {
-          return { type: 'tool_result', tool_use_id: '', content: `Todo #${input.id} not found`, is_error: true }
-        }
-        item.done = !item.done
-        return { type: 'tool_result', tool_use_id: '', content: `Todo #${item.id} ${item.done ? 'completed' : 'reopened'}` }
-      }
+    const validationError = validateTodos(todos)
+    if (validationError && validationError.startsWith('todos[')) {
+      return { type: 'tool_result', tool_use_id: '', content: validationError, is_error: true }
+    }
 
-      case 'remove': {
-        const idx = todoList.findIndex(t => t.id === input.id)
-        if (idx === -1) {
-          return { type: 'tool_result', tool_use_id: '', content: `Todo #${input.id} not found`, is_error: true }
-        }
-        todoList.splice(idx, 1)
-        return { type: 'tool_result', tool_use_id: '', content: `Todo #${input.id} removed` }
-      }
+    const sessionId = context.sessionId || 'default'
 
-      case 'list': {
-        if (todoList.length === 0) {
-          return { type: 'tool_result', tool_use_id: '', content: 'No todos.' }
-        }
-        const lines = todoList.map(t =>
-          `${t.done ? '[x]' : '[ ]'} #${t.id} ${t.text}${t.priority ? ` (${t.priority})` : ''}`
-        )
-        return { type: 'tool_result', tool_use_id: '', content: lines.join('\n') }
-      }
+    await saveTodos(sessionId, todos)
 
-      case 'clear': {
-        todoList.length = 0
-        return { type: 'tool_result', tool_use_id: '', content: 'All todos cleared.' }
-      }
+    const formatted = formatTodos(todos)
+    const json = JSON.stringify(todos, null, 2)
+    const output = `${formatted}\n\n${json}`
 
-      default:
-        return { type: 'tool_result', tool_use_id: '', content: `Unknown action: ${input.action}`, is_error: true }
+    const warning = validationError ? `\n\nNote: ${validationError}` : ''
+
+    return {
+      type: 'tool_result',
+      tool_use_id: '',
+      content: output + warning,
     }
   },
 }
