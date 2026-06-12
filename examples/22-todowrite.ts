@@ -65,14 +65,14 @@ async function main() {
       console.log(`  tokens: ${msg.usage?.input_tokens} in / ${msg.usage?.output_tokens} out`)
 
       if (msg.session_id) {
-        console.log(`\n=== FINAL TODO LIST (from session ${msg.session_id}) ===`)
+        console.log(`\n=== TODO LIST ===`)
         const todos = await getTodos(msg.session_id)
         if (todos.length === 0) {
           console.log('  (no todos)')
         } else {
           for (const t of todos) {
-            const icon = t.status === 'completed' ? '✓' : t.status === 'in_progress' ? '⧖' : t.status === 'cancelled' ? '✗' : '☐'
-            console.log(`  ${icon} ${t.content} (${t.priority}) [${t.status}]`)
+            const mark = t.status === 'completed' ? '✓' : t.status === 'in_progress' ? '•' : t.status === 'cancelled' ? '✗' : ' '
+            console.log(`[${mark}] ${t.content}`)
           }
         }
       }
