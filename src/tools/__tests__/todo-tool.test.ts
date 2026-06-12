@@ -149,6 +149,25 @@ describe('TodoWriteTool', () => {
 
       expect(result.is_error).toBe(true)
     })
+
+    it('rejects path traversal in sessionId', async () => {
+      const evilContext: ToolContext = { ...mockContext, sessionId: '../../etc' }
+      const result = await TodoWriteTool.call({
+        todos: [{ content: 'Evil', status: 'pending', priority: 'high' }],
+      }, evilContext)
+
+      expect(result.is_error).toBe(true)
+      expect(result.content).toContain('sessionId')
+    })
+
+    it('rejects sessionId with special characters', async () => {
+      const evilContext: ToolContext = { ...mockContext, sessionId: 'session;rm -rf /' }
+      const result = await TodoWriteTool.call({
+        todos: [{ content: 'Evil', status: 'pending', priority: 'high' }],
+      }, evilContext)
+
+      expect(result.is_error).toBe(true)
+    })
   })
 
   describe('output formatting', () => {

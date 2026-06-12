@@ -1,6 +1,6 @@
 import { readFile, writeFile, mkdir } from 'node:fs/promises'
 import { join } from 'node:path'
-import { existsSync } from 'node:fs'
+
 import type { ToolDefinition, ToolContext, ToolResult } from '../types.js'
 
 export type TodoStatus = 'pending' | 'in_progress' | 'completed' | 'cancelled'
@@ -46,7 +46,15 @@ interface TodoFile {
   todos: TodoInfo[]
 }
 
+function validateSessionId(sessionId: string): string {
+  if (!/^[a-zA-Z0-9_-]+$/.test(sessionId)) {
+    throw new Error(`Invalid sessionId: ${sessionId}. Must match /^[a-zA-Z0-9_-]+$/`)
+  }
+  return sessionId
+}
+
 async function saveTodos(sessionId: string, todos: TodoInfo[]): Promise<void> {
+  validateSessionId(sessionId)
   const dir = join(getTodosDir(), sessionId)
   await mkdir(dir, { recursive: true })
 
@@ -59,11 +67,9 @@ async function saveTodos(sessionId: string, todos: TodoInfo[]): Promise<void> {
 }
 
 async function loadTodos(sessionId: string): Promise<TodoInfo[]> {
-  const filePath = getTodosPath(sessionId)
-  if (!existsSync(filePath)) return []
-
+  validateSessionId(sessionId)
   try {
-    const raw = await readFile(filePath, 'utf-8')
+    const raw = await readFile(getTodosPath(sessionId), 'utf-8')
     const data = JSON.parse(raw) as TodoFile
     return data.todos || []
   } catch {
@@ -172,6 +178,12 @@ export const TodoWriteTool: ToolDefinition = {
     }
 
     const sessionId = context.sessionId || 'default'
+
+    try {
+      validateSessionId(sessionId)
+    } catch (e: any) {
+      return { type: 'tool_result', tool_use_id: '', content: e.message, is_error: true }
+    }
 
     await saveTodos(sessionId, todos)
 
