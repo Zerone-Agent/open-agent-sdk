@@ -369,10 +369,6 @@ export {
   clearConfig,
 } from './tools/config-tool.js'
 
-export {
-  getTodos,
-  clearTodos,
-} from './tools/todo-tool.js'
 export type { TodoInfo, TodoStatus, TodoPriority } from './tools/todo-tool.js'
 
 // --------------------------------------------------------------------------
