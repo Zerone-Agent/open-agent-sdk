@@ -11,10 +11,16 @@
  *
  * Run: npx tsx examples/22-todowrite.ts
  */
-import { createAgent } from '../src/index.js'
+import { createAgent, TodoWriteTool } from '../src/index.js'
 
 async function main() {
   console.log('--- Example 22: TodoWrite Tool ---\n')
+
+  console.log('=== TOOL DESCRIPTION ===')
+  console.log(TodoWriteTool.description)
+  console.log('\n=== TOOL INPUT SCHEMA ===')
+  console.log(JSON.stringify(TodoWriteTool.inputSchema, null, 2))
+  console.log('\n')
 
   const agent = createAgent({
     model: process.env.OPENAGENT_MODEL || 'claude-sonnet-4-6',
