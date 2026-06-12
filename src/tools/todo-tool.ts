@@ -1,7 +1,18 @@
 import { readFile, writeFile, mkdir } from 'node:fs/promises'
-import { join } from 'node:path'
+import { readFileSync } from 'node:fs'
+import { join, dirname } from 'node:path'
+import { fileURLToPath } from 'node:url'
 
 import type { ToolDefinition, ToolContext, ToolResult } from '../types.js'
+
+const __dirname = dirname(fileURLToPath(import.meta.url))
+
+let _description: string
+try {
+  _description = readFileSync(join(__dirname, 'todowrite.txt'), 'utf-8')
+} catch {
+  _description = 'Manage a structured task list for your current coding session.'
+}
 
 export type TodoStatus = 'pending' | 'in_progress' | 'completed' | 'cancelled'
 export type TodoPriority = 'high' | 'medium' | 'low'
@@ -14,23 +25,6 @@ export interface TodoInfo {
 
 const VALID_STATUSES: readonly string[] = ['pending', 'in_progress', 'completed', 'cancelled']
 const VALID_PRIORITIES: readonly string[] = ['high', 'medium', 'low']
-
-let _description = ''
-
-async function loadDescription(): Promise<string> {
-  if (_description) return _description
-  try {
-    const { fileURLToPath } = await import('node:url')
-    const { dirname, join } = await import('node:path')
-    const __filename = fileURLToPath(import.meta.url)
-    const __dirname = dirname(__filename)
-    const { readFile } = await import('node:fs/promises')
-    _description = await readFile(join(__dirname, 'todowrite.txt'), 'utf-8')
-  } catch {
-    _description = 'Manage a structured task list for your current coding session.'
-  }
-  return _description
-}
 
 function getTodosDir(): string {
   const home = process.env.HOME || process.env.USERPROFILE || '/tmp'
@@ -130,7 +124,7 @@ export async function clearTodos(sessionId: string): Promise<void> {
 
 export const TodoWriteTool: ToolDefinition = {
   name: 'TodoWrite',
-  description: 'Manage a structured task list for your current coding session. See prompt for detailed usage instructions.',
+  description: _description,
   inputSchema: {
     type: 'object',
     properties: {
@@ -162,7 +156,7 @@ export const TodoWriteTool: ToolDefinition = {
   isConcurrencySafe: () => true,
   isEnabled: () => true,
   async prompt() {
-    return loadDescription()
+    return _description
   },
   async call(input: any, context: ToolContext): Promise<ToolResult> {
     const todos = input.todos
