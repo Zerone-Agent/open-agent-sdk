@@ -83,7 +83,6 @@ async function main() {
     }
   }
 
-  agent[Symbol.asyncDispose]()
 }
 
 main().catch(console.error)
