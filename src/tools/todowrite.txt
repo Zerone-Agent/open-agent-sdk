@@ -1,4 +1,4 @@
-Use this tool to create and manage a structured task list for your current coding session. It helps track progress and surface status to the user.
+Use this tool to create and manage a structured task list for your current session. It helps track progress and surface status to the user.
 
 ## When to Use
 1. Multi-step tasks requiring 3+ distinct steps or careful planning
