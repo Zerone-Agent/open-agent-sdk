@@ -253,6 +253,7 @@ export interface ToolContext {
   settingSources?: SettingSource[]
   /** Agent identifier for memory isolation */
   agentId: string
+  sessionId?: string
 }
 
 export interface ToolResult {
