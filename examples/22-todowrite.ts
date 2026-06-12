@@ -11,7 +11,7 @@
  *
  * Run: npx tsx examples/22-todowrite.ts
  */
-import { createAgent, getTodos, clearTodos } from '../src/index.js'
+import { createAgent } from '../src/index.js'
 
 async function main() {
   console.log('--- Example 22: TodoWrite Tool ---\n')
@@ -33,6 +33,19 @@ async function main() {
   console.log('\n')
 
   let turnCount = 0
+
+  function printTodoListFromJson(raw: string) {
+    const jsonMatch = raw.match(/\n(\[[\s\S]*\])\s*$/)
+    if (!jsonMatch) return
+    try {
+      const todos = JSON.parse(jsonMatch[1])
+      console.log('\n=== TODO LIST ===')
+      for (const t of todos) {
+        const mark = t.status === 'completed' ? '✓' : t.status === 'in_progress' ? '•' : t.status === 'cancelled' ? '✗' : ' '
+        console.log(`[${mark}] ${t.content}`)
+      }
+    } catch {}
+  }
 
   for await (const event of agent.query(userPrompt)) {
     const msg = event as any
@@ -56,6 +69,10 @@ async function main() {
       const truncated = output.length > 500 ? output.slice(0, 500) + '...(truncated)' : output
       console.log(`\n=== TOOL RESULT (${msg.result.tool_name}) ===`)
       console.log(truncated)
+
+      if (msg.result.tool_name === 'TodoWrite') {
+        printTodoListFromJson(output)
+      }
     }
 
     if (msg.type === 'result') {
@@ -63,19 +80,6 @@ async function main() {
       console.log(`  subtype: ${msg.subtype}`)
       console.log(`  num_turns: ${msg.num_turns}`)
       console.log(`  tokens: ${msg.usage?.input_tokens} in / ${msg.usage?.output_tokens} out`)
-
-      if (msg.session_id) {
-        console.log(`\n=== TODO LIST ===`)
-        const todos = await getTodos(msg.session_id)
-        if (todos.length === 0) {
-          console.log('  (no todos)')
-        } else {
-          for (const t of todos) {
-            const mark = t.status === 'completed' ? '✓' : t.status === 'in_progress' ? '•' : t.status === 'cancelled' ? '✗' : ' '
-            console.log(`[${mark}] ${t.content}`)
-          }
-        }
-      }
     }
   }
 
