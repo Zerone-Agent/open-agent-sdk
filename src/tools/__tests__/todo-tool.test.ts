@@ -201,7 +201,7 @@ describe('TodoWriteTool', () => {
       expect(output).toContain('"priority"')
     })
 
-    it('shows count of incomplete todos', async () => {
+    it('shows status marks for each todo', async () => {
       const result = await TodoWriteTool.call({
         todos: [
           { content: 'Task 1', status: 'completed', priority: 'high' },
@@ -211,7 +211,9 @@ describe('TodoWriteTool', () => {
       }, mockContext)
 
       const output = typeof result.content === 'string' ? result.content : JSON.stringify(result.content)
-      expect(output).toMatch(/2 todos/)
+      expect(output).toContain('[✓] Task 1')
+      expect(output).toContain('[ ] Task 2')
+      expect(output).toContain('[•] Task 3')
     })
   })
 

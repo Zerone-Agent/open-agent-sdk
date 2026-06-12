@@ -101,22 +101,20 @@ function validateTodos(todos: any[]): string | null {
   return null
 }
 
-const STATUS_ICONS: Record<TodoStatus, string> = {
-  pending: '\u2610',
-  in_progress: '\u29D6',
-  completed: '\u2713',
-  cancelled: '\u2717',
+const STATUS_MARKS: Record<TodoStatus, string> = {
+  pending: ' ',
+  in_progress: '•',
+  completed: '✓',
+  cancelled: '✗',
 }
 
 function formatTodos(todos: TodoInfo[]): string {
   if (todos.length === 0) return 'No todos.'
 
-  const incomplete = todos.filter(t => t.status !== 'completed' && t.status !== 'cancelled').length
-  const lines: string[] = [`${incomplete} todo${incomplete !== 1 ? 's' : ''}:`]
+  const lines: string[] = []
 
   for (const t of todos) {
-    const icon = STATUS_ICONS[t.status]
-    lines.push(`  ${icon} ${t.content} (${t.priority}) [${t.status}]`)
+    lines.push(`[${STATUS_MARKS[t.status]}] ${t.content}`)
   }
 
   return lines.join('\n')
