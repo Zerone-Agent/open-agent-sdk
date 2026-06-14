@@ -1,0 +1,25 @@
+Use this tool to create and manage a structured task list for your current session. It helps track progress and surface status to the user.
+
+## When to Use
+1. Multi-step tasks requiring 3+ distinct steps or careful planning
+2. User provides multiple tasks (numbered or comma-separated)
+3. After receiving new instructions — capture as todos immediately
+4. After completing a task — mark complete, add follow-ups
+
+## When NOT to Use
+1. Single straightforward task (< 3 trivial steps)
+2. Purely conversational or informational requests
+3. One trivial action — just do it directly
+
+## Task States
+- **pending**: Not yet started
+- **in_progress**: Currently working on (limit to ONE at a time)
+- **completed**: Finished successfully
+- **cancelled**: No longer needed
+
+## Rules
+- Only ONE task should be `in_progress` at any time
+- Mark tasks `completed` IMMEDIATELY after finishing (don't batch)
+- Cancel tasks that become irrelevant
+- Create specific, actionable items with clear descriptions
+- Break complex tasks into smaller steps
