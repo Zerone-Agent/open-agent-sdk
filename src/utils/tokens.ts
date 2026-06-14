@@ -91,14 +91,18 @@ export function getContextWindowSize(model: string): number {
 }
 
 /**
- * Auto-compact buffer: trigger compaction when within this many tokens of the limit.
+ * Auto-compact buffer: trigger compaction when remaining capacity drops below
+ * min(AUTOCOMPACT_BUFFER_MAX_TOKENS, contextWindow / AUTOCOMPACT_BUFFER_WINDOW_RATIO).
  */
-export const AUTOCOMPACT_BUFFER_TOKENS = 20_000
+export const AUTOCOMPACT_BUFFER_MAX_TOKENS = 50_000
+export const AUTOCOMPACT_BUFFER_WINDOW_RATIO = 4
 
 export const DEFAULT_MAX_REQUEST_BODY_BYTES = 6 * 1024 * 1024
 
 export function getAutoCompactThreshold(model: string, contextWindow?: number): number {
-  return (contextWindow ?? getContextWindowSize(model)) - AUTOCOMPACT_BUFFER_TOKENS
+  const ctx = contextWindow ?? getContextWindowSize(model)
+  const buffer = Math.min(AUTOCOMPACT_BUFFER_MAX_TOKENS, ctx / AUTOCOMPACT_BUFFER_WINDOW_RATIO)
+  return ctx - buffer
 }
 
 /**
