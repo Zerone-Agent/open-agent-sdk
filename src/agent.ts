@@ -22,6 +22,7 @@ import type {
   AgentOptions,
   QueryResult,
   SDKMessage,
+  SDKCompactMessage,
   ToolDefinition,
   CanUseToolFn,
   Message,
@@ -36,13 +37,14 @@ import {
   saveSession,
   loadSession,
 } from './session.js'
-import { createHookRegistry, type HookRegistry } from './hooks.js'
+import { createHookRegistry, type HookRegistry, type HookEvent, type HookInput, type HookOutput } from './hooks.js'
 import { loadSkillsFromFilesystem, registerSkill as registryRegisterSkill, unregisterSkill as registryUnregisterSkill, clearSkills, getUserInvocableSkills } from './skills/index.js'
 import type { SkillDefinition } from './skills/types.js'
 import { createProvider, type LLMProvider, type ApiType } from './providers/index.js'
 import type { NormalizedMessageParam } from './providers/types.js'
 import { DEFAULT_MAX_TOKENS } from './engine.js'
 import { SYSTEM_PROMPTS } from './prompts/system-prompts.js'
+import { compactConversationWithProtectedTail, type AutoCompactState } from './utils/compact.js'
 
 // --------------------------------------------------------------------------
 // Agent class
@@ -461,6 +463,98 @@ export class Agent {
    */
   async interrupt(): Promise<void> {
     this.abortCtrl?.abort()
+  }
+
+  /**
+   * Fire lifecycle hooks. Returns hook outputs; never throws.
+   */
+  private async executeHooks(
+    event: HookEvent,
+    extra?: Partial<HookInput>,
+  ): Promise<HookOutput[]> {
+    if (!this.hookRegistry.hasHooks(event)) return []
+    try {
+      return await this.hookRegistry.execute(event, {
+        event,
+        sessionId: this.sid,
+        cwd: this.cfg.cwd || process.cwd(),
+        ...extra,
+      })
+    } catch {
+      return []
+    }
+  }
+
+  /**
+   * Manually trigger compaction of the current conversation history.
+   *
+   * Summarizes older history while protecting the most recent turns, firing
+   * PreCompact/PostCompact hooks. Streams `compact` events (start/progress/end)
+   * so callers can surface progress (e.g. a `/compact` command). Uses the same
+   * algorithm as auto-compaction. Persists the session afterwards.
+   */
+  async *compactStream(): AsyncGenerator<SDKCompactMessage> {
+    await this.setupDone
+    await this.executeHooks('PreCompact')
+    try {
+      const state: AutoCompactState = {
+        compacted: false,
+        turnCounter: 0,
+        consecutiveFailures: 0,
+        lastInputTokens: this.lastInputTokens,
+        lastOutputTokens: this.lastOutputTokens,
+      }
+      const gen = compactConversationWithProtectedTail(
+        this.provider,
+        this.modelId,
+        this.history,
+        state,
+      )
+      while (true) {
+        const next = await gen.next()
+        if (next.done) {
+          this.history = next.value.messages
+          this.lastInputTokens = next.value.state.lastInputTokens
+          this.lastOutputTokens = next.value.state.lastOutputTokens
+          break
+        }
+        yield next.value
+      }
+      await this.executeHooks('PostCompact')
+    } catch {
+      // Leave history unchanged on failure; skip PostCompact
+    }
+
+    if (this.cfg.persistSession !== false && this.history.length > 0) {
+      try {
+        await saveSession(this.sid, this.history, {
+          cwd: this.cfg.cwd || process.cwd(),
+          model: this.modelId,
+          provider: this.apiType,
+          summary: undefined,
+          lastInputTokens: this.lastInputTokens,
+          lastOutputTokens: this.lastOutputTokens,
+        })
+      } catch {
+        // best-effort
+      }
+    }
+  }
+
+  /**
+   * Manually trigger compaction (non-streaming convenience wrapper).
+   *
+   * Consumes `compactStream()` and returns the resulting summary. Useful when a
+   * caller does not need incremental progress events.
+   */
+  async compact(): Promise<{ summary: string; compacted: boolean }> {
+    let summary = ''
+    for await (const ev of this.compactStream()) {
+      if (ev.type === 'compact' && ev.phase === 'end') {
+        summary = ev.summary ?? ''
+      }
+    }
+    return { summary, compacted: summary.length > 0 }
   }
 
   /**

@@ -10,14 +10,14 @@
  *
  * Run: npx tsx examples/20-compact-features.ts
  */
-import { createAgent } from '../src/index.js'
+import { createAgent, getAutoCompactThreshold } from '../src/index.js'
 
 const CONTEXT_WINDOW = 40_000
 
 async function main() {
   console.log('=== Compact Features Test ===\n')
   console.log(`contextWindow: ${CONTEXT_WINDOW.toLocaleString()}`)
-  console.log(`compact threshold: ${(CONTEXT_WINDOW - 20_000).toLocaleString()} tokens\n`)
+  console.log(`compact threshold: ${getAutoCompactThreshold('claude-sonnet-4-6', CONTEXT_WINDOW).toLocaleString()} tokens\n`)
 
   const agent = createAgent({
     model: process.env.OPENAGENT_MODEL || 'claude-sonnet-4-6',

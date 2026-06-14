@@ -211,6 +211,76 @@ export async function compactConversation(
 }
 
 /**
+ * Compact a conversation while protecting the most recent turns.
+ *
+ * Splits the conversation into a "head" (summarized) and a "tail" (kept
+ * verbatim). The last message and the most recent PRUNE_PROTECTED_TURNS user
+ * turns are protected; everything before that is summarized via
+ * compactConversationStream. Reassembles [summary, ...tail, lastMessage].
+ *
+ * Used by both auto-compaction and manual `compact()` triggers so that both
+ * paths share identical behavior.
+ */
+export async function* compactConversationWithProtectedTail(
+  provider: LLMProvider,
+  model: string,
+  messages: NormalizedMessageParam[],
+  state: AutoCompactState,
+): AsyncGenerator<SDKCompactMessage, {
+  messages: NormalizedMessageParam[]
+  state: AutoCompactState
+  summary: string
+}> {
+  // Nothing meaningful to compact.
+  if (messages.length < 2) {
+    return { messages: [...messages], state, summary: '' }
+  }
+
+  const lastMsg = messages[messages.length - 1]
+  const historyMsgs = messages.slice(0, -1)
+
+  const userMsgIndices: number[] = []
+  for (let i = 0; i < historyMsgs.length; i++) {
+    if ((historyMsgs[i] as any).role === 'user') {
+      userMsgIndices.push(i)
+    }
+  }
+  const protectedStart = Math.max(0, userMsgIndices.length - PRUNE_PROTECTED_TURNS)
+  const cutoffIndex = protectedStart < userMsgIndices.length
+    ? userMsgIndices[protectedStart]
+    : historyMsgs.length
+
+  const headMsgs = historyMsgs.slice(0, cutoffIndex)
+  const tailMsgs = historyMsgs.slice(cutoffIndex)
+
+  const stream = compactConversationStream(
+    provider,
+    model,
+    headMsgs as any[],
+    state,
+  )
+  let result: CompactResult
+  while (true) {
+    const next = await stream.next()
+    if (next.done) {
+      result = next.value
+      break
+    }
+    yield next.value
+  }
+
+  return {
+    messages: [
+      ...result.compactedMessages as NormalizedMessageParam[],
+      ...tailMsgs as NormalizedMessageParam[],
+      lastMsg,
+    ],
+    state: result.state,
+    summary: result.summary,
+  }
+}
+
+/**
  * Strip images from messages for compaction safety.
  */
 function stripImagesFromMessages(

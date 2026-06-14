@@ -257,6 +257,7 @@ export {
   shouldAutoCompact,
   compactConversation,
   compactConversationStream,
+  compactConversationWithProtectedTail,
   microCompactMessages,
   pruneMessages,
   createAutoCompactState,
