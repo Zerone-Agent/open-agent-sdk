@@ -18,6 +18,21 @@ import {
 export const PRUNE_PROTECTED_TURNS = 2
 export const PRUNE_THRESHOLD_CHARS = 20_000
 
+/**
+ * Whether a message is a "real" user turn (not a tool_result wrapper).
+ *
+ * In the internal normalized format, tool results are carried by messages with
+ * role 'user' (Anthropic convention). These are part of the tool loop, not a
+ * new user turn, so they must be excluded when counting turns to protect.
+ */
+function isUserTurn(msg: any): boolean {
+  if (msg.role !== 'user') return false
+  if (Array.isArray(msg.content)) {
+    return !msg.content.some((b: any) => b && b.type === 'tool_result')
+  }
+  return true
+}
+
 export interface AutoCompactState {
   compacted: boolean
   turnCounter: number
@@ -241,7 +256,7 @@ export async function* compactConversationWithProtectedTail(
 
   const userMsgIndices: number[] = []
   for (let i = 0; i < historyMsgs.length; i++) {
-    if ((historyMsgs[i] as any).role === 'user') {
+    if (isUserTurn(historyMsgs[i])) {
       userMsgIndices.push(i)
     }
   }
@@ -338,7 +353,7 @@ function buildCompactionPrompt(messages: any[]): string {
 export function pruneMessages(messages: any[]): void {
   const userMsgIndices: number[] = []
   for (let i = 0; i < messages.length; i++) {
-    if (messages[i].role === 'user') {
+    if (isUserTurn(messages[i])) {
       userMsgIndices.push(i)
     }
   }
