@@ -18,6 +18,21 @@ import {
 export const PRUNE_PROTECTED_TURNS = 2
 export const PRUNE_THRESHOLD_CHARS = 20_000
 
+/**
+ * Whether a message is a "real" user turn (not a tool_result wrapper).
+ *
+ * In the internal normalized format, tool results are carried by messages with
+ * role 'user' (Anthropic convention). These are part of the tool loop, not a
+ * new user turn, so they must be excluded when counting turns to protect.
+ */
+function isUserTurn(msg: any): boolean {
+  if (msg.role !== 'user') return false
+  if (Array.isArray(msg.content)) {
+    return !msg.content.some((b: any) => b && b.type === 'tool_result')
+  }
+  return true
+}
+
 export interface AutoCompactState {
   compacted: boolean
   turnCounter: number
@@ -211,6 +226,76 @@ export async function compactConversation(
 }
 
 /**
+ * Compact a conversation while protecting the most recent turns.
+ *
+ * Splits the conversation into a "head" (summarized) and a "tail" (kept
+ * verbatim). The last message and the most recent PRUNE_PROTECTED_TURNS user
+ * turns are protected; everything before that is summarized via
+ * compactConversationStream. Reassembles [summary, ...tail, lastMessage].
+ *
+ * Used by both auto-compaction and manual `compact()` triggers so that both
+ * paths share identical behavior.
+ */
+export async function* compactConversationWithProtectedTail(
+  provider: LLMProvider,
+  model: string,
+  messages: NormalizedMessageParam[],
+  state: AutoCompactState,
+): AsyncGenerator<SDKCompactMessage, {
+  messages: NormalizedMessageParam[]
+  state: AutoCompactState
+  summary: string
+}> {
+  // Nothing meaningful to compact.
+  if (messages.length < 2) {
+    return { messages: [...messages], state, summary: '' }
+  }
+
+  const lastMsg = messages[messages.length - 1]
+  const historyMsgs = messages.slice(0, -1)
+
+  const userMsgIndices: number[] = []
+  for (let i = 0; i < historyMsgs.length; i++) {
+    if (isUserTurn(historyMsgs[i])) {
+      userMsgIndices.push(i)
+    }
+  }
+  const protectedStart = Math.max(0, userMsgIndices.length - PRUNE_PROTECTED_TURNS)
+  const cutoffIndex = protectedStart < userMsgIndices.length
+    ? userMsgIndices[protectedStart]
+    : historyMsgs.length
+
+  const headMsgs = historyMsgs.slice(0, cutoffIndex)
+  const tailMsgs = historyMsgs.slice(cutoffIndex)
+
+  const stream = compactConversationStream(
+    provider,
+    model,
+    headMsgs as any[],
+    state,
+  )
+  let result: CompactResult
+  while (true) {
+    const next = await stream.next()
+    if (next.done) {
+      result = next.value
+      break
+    }
+    yield next.value
+  }
+
+  return {
+    messages: [
+      ...result.compactedMessages as NormalizedMessageParam[],
+      ...tailMsgs as NormalizedMessageParam[],
+      lastMsg,
+    ],
+    state: result.state,
+    summary: result.summary,
+  }
+}
+
+/**
  * Strip images from messages for compaction safety.
  */
 function stripImagesFromMessages(
@@ -268,7 +353,7 @@ function buildCompactionPrompt(messages: any[]): string {
 export function pruneMessages(messages: any[]): void {
   const userMsgIndices: number[] = []
   for (let i = 0; i < messages.length; i++) {
-    if (messages[i].role === 'user') {
+    if (isUserTurn(messages[i])) {
       userMsgIndices.push(i)
     }
   }

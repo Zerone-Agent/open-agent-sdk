@@ -18,6 +18,7 @@ export const MAX_TOKENS_NON_STREAMING = 16 * 1024
 import type {
   SDKMessage,
   SDKSubagentMessage,
+  SDKCompactMessage,
   QueryEngineConfig,
   ToolDefinition,
   ToolResult,
@@ -38,10 +39,9 @@ import { enforceBodySizeLimit } from './utils/body-size.js'
 import {
   shouldAutoCompact,
   compactConversation,
-  compactConversationStream,
+  compactConversationWithProtectedTail,
   microCompactMessages,
   pruneMessages,
-  PRUNE_PROTECTED_TURNS,
   createAutoCompactState,
   type AutoCompactState,
 } from './utils/compact.js'
@@ -341,49 +341,8 @@ export class QueryEngine {
 
       // Auto-compact if context is too large
       if (shouldAutoCompact(this.compactState, this.config.model, this.config.contextWindow)) {
-        await this.executeHooks('PreCompact')
-        try {
-          const lastMsg = this.messages[this.messages.length - 1]
-          const historyMsgs = this.messages.slice(0, -1)
-
-          const userMsgIndices: number[] = []
-          for (let i = 0; i < historyMsgs.length; i++) {
-            if ((historyMsgs[i] as any).role === 'user') {
-              userMsgIndices.push(i)
-            }
-          }
-          const protectedStart = Math.max(0, userMsgIndices.length - PRUNE_PROTECTED_TURNS)
-          const cutoffIndex = protectedStart < userMsgIndices.length
-            ? userMsgIndices[protectedStart]
-            : historyMsgs.length
-
-          const headMsgs = historyMsgs.slice(0, cutoffIndex)
-          const tailMsgs = historyMsgs.slice(cutoffIndex)
-
-          const stream = compactConversationStream(
-            this.provider,
-            this.config.model,
-            headMsgs as any[],
-            this.compactState,
-          )
-          let result: import('./utils/compact.js').CompactResult
-          while (true) {
-            const next = await stream.next()
-            if (next.done) {
-              result = next.value
-              break
-            }
-            yield next.value
-          }
-          this.messages = [
-            ...result.compactedMessages as NormalizedMessageParam[],
-            ...tailMsgs as NormalizedMessageParam[],
-            lastMsg,
-          ]
-          this.compactState = result.state
-          await this.executeHooks('PostCompact')
-        } catch {
-          // Continue with uncompacted messages
+        for await (const ev of this.compactStream()) {
+          yield ev
         }
       }
 
@@ -1061,5 +1020,53 @@ export class QueryEngine {
       lastInputTokens: this.compactState.lastInputTokens,
       lastOutputTokens: this.compactState.lastOutputTokens,
     }
+  }
+
+  /**
+   * Manually trigger compaction of the current conversation.
+   *
+   * Summarizes older history while protecting the most recent turns, firing
+   * PreCompact/PostCompact hooks. Streams `compact` events (start/progress/end)
+   * so callers can surface progress (e.g. a `/compact` command). This is the
+   * same algorithm used by auto-compaction, so behavior is identical.
+   */
+  async *compactStream(): AsyncGenerator<SDKCompactMessage> {
+    await this.executeHooks('PreCompact')
+    try {
+      const gen = compactConversationWithProtectedTail(
+        this.provider,
+        this.config.model,
+        this.messages,
+        this.compactState,
+      )
+      while (true) {
+        const next = await gen.next()
+        if (next.done) {
+          this.messages = next.value.messages
+          this.compactState = next.value.state
+          break
+        }
+        yield next.value
+      }
+      await this.executeHooks('PostCompact')
+    } catch {
+      // Leave messages unchanged on failure; skip PostCompact
+    }
+  }
+
+  /**
+   * Manually trigger compaction (non-streaming convenience wrapper).
+   *
+   * Consumes `compactStream()` and returns the resulting summary. Useful when a
+   * caller does not need incremental progress events.
+   */
+  async compact(): Promise<{ summary: string; compacted: boolean }> {
+    let summary = ''
+    for await (const ev of this.compactStream()) {
+      if (ev.type === 'compact' && ev.phase === 'end') {
+        summary = ev.summary ?? ''
+      }
+    }
+    return { summary, compacted: summary.length > 0 }
   }
 }

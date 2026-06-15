@@ -244,7 +244,8 @@ export {
   getAutoCompactThreshold,
   estimateCost,
   MODEL_PRICING,
-  AUTOCOMPACT_BUFFER_TOKENS,
+  AUTOCOMPACT_BUFFER_MAX_TOKENS,
+  AUTOCOMPACT_BUFFER_WINDOW_RATIO,
   DEFAULT_MAX_REQUEST_BODY_BYTES,
 } from './utils/tokens.js'
 
@@ -256,6 +257,7 @@ export {
   shouldAutoCompact,
   compactConversation,
   compactConversationStream,
+  compactConversationWithProtectedTail,
   microCompactMessages,
   pruneMessages,
   createAutoCompactState,
