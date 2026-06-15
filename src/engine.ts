@@ -786,6 +786,7 @@ export class QueryEngine {
       apiType: this.provider.apiType,
       maxTokens: this.config.maxTokens,
       agentId: this.config.agentId,
+      sessionId: this.sessionId,
       allowedSkills: this.config.allowedSkills,
       settingSources: this.config.settingSources,
       emitEvent: emitSubagentEvent
